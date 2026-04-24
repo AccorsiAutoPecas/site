@@ -1,10 +1,12 @@
 "use server";
 
+import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { createClient } from "@/services/supabase/server";
 import { revalidatePath } from "next/cache";
 
 /** Alterna destaque a partir da listagem do painel (estrela). */
 export async function toggleProductDestaque(formData: FormData): Promise<void> {
+  await requireAdmin();
   const id = String(formData.get("id") ?? "").trim();
   const nextRaw = String(formData.get("next") ?? "");
   if (!id || (nextRaw !== "0" && nextRaw !== "1")) return;

@@ -5,9 +5,14 @@ import { storeShellContent, storeShellInset } from "@/config/storeShell";
 
 const QUICK_LINKS = [
   { href: "/", label: "Início" },
-  { href: "/categorias", label: "Categorias" },
+  { href: "/produtos#categorias", label: "Categorias" },
   { href: "/produtos", label: "Produtos" },
   { href: "/sobre", label: "Sobre nós" },
+] as const;
+
+const LEGAL_LINKS = [
+  { href: "/termos", label: "Termos de uso" },
+  { href: "/privacidade", label: "Política de privacidade" },
 ] as const;
 
 const SOCIAL = {
@@ -15,6 +20,8 @@ const SOCIAL = {
   instagram: "https://www.instagram.com/",
   youtube: "https://www.youtube.com/",
 } as const;
+
+const FOOTER_LOGO = "/home/logo-footer.png";
 
 function IconPhone({ className }: { className?: string }) {
   return (
@@ -88,10 +95,21 @@ export function SiteFooter() {
       <div className={`${storeShellContent} py-12 sm:py-14`}>
         <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-12">
           <div className="max-w-sm space-y-4">
-            <div>
-              <p className="text-3xl font-bold italic tracking-wide text-white sm:text-4xl">ACCORSI</p>
-              <p className="text-sm font-normal text-white/90 sm:text-base">auto peças</p>
-            </div>
+            <Link
+              href="/"
+              className="inline-block rounded-sm outline-none ring-white/30 focus-visible:ring-2"
+              aria-label="Accorsi Auto Peças — início"
+            >
+              <Image
+                src={FOOTER_LOGO}
+                alt="Accorsi Auto Peças"
+                width={300}
+                height={96}
+                className="h-10 w-auto max-w-[12rem] object-contain object-left sm:h-12 sm:max-w-[14rem]"
+                sizes="(max-width: 640px) 12rem, 14rem"
+                unoptimized
+              />
+            </Link>
             <p className="text-sm leading-relaxed text-white/90">
               A Accorsi Auto Peças é sua parceira confiável em peças automotivas. Qualidade e variedade para o seu
               veículo.
@@ -116,19 +134,19 @@ export function SiteFooter() {
             <ul className="space-y-3 text-sm text-white/90">
               <li className="flex gap-3">
                 <IconPhone className="mt-0.5 h-5 w-5 shrink-0 text-store-accent" />
-                <a href="tel:+551112345678" className="transition hover:text-white">
-                  (11) 1234-5678
+                <a href="tel:+555434523052" className="transition hover:text-white">
+                  (54) 3452-3052
                 </a>
               </li>
               <li className="flex gap-3">
                 <IconMail className="mt-0.5 h-5 w-5 shrink-0 text-store-accent" />
                 <a href="mailto:contato@accorsi.com.br" className="transition hover:text-white">
-                  contato@accorsi.com.br
+                  comercial@accorsipecas.com.br
                 </a>
               </li>
               <li className="flex gap-3">
                 <IconMapPin className="mt-0.5 h-5 w-5 shrink-0 text-store-accent" />
-                <span>Rua das Peças, 123 — Centro, São Paulo — SP</span>
+                <span>R. Guilherme Fasolo, 930 - Maria Goretti, Bento Gonçalves - RS, 95707-110</span>
               </li>
             </ul>
           </div>
@@ -193,6 +211,20 @@ export function SiteFooter() {
         </div>
 
         <div className="mt-12 border-t border-white/15 pt-6">
+          <nav
+            aria-label="Informações legais"
+            className="mb-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs sm:text-sm"
+          >
+            {LEGAL_LINKS.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="text-white/80 underline-offset-2 transition hover:text-white hover:underline"
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
           <p className="text-center text-xs text-white/55 sm:text-sm">
             © {year} Accorsi Auto Peças. Todos os direitos reservados.
           </p>

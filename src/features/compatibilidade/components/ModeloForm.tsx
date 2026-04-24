@@ -1,6 +1,10 @@
 "use client";
 
 import { useActionState } from "react";
+import {
+  TIPO_VEICULO_MODELO_LABELS,
+  TIPOS_VEICULO_MODELO,
+} from "@/features/compatibilidade/constants/tipoVeiculoModelo";
 import { createModelo, type CreateModeloState } from "@/features/compatibilidade/services/modeloActions";
 
 export type MarcaOption = {
@@ -62,6 +66,20 @@ export function ModeloForm({ marcas }: { marcas: MarcaOption[] }) {
             className={fieldClass}
             placeholder="Ex.: Civic, Gol 1.0, Corolla XEi"
           />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="tipo_veiculo" className="text-sm font-medium text-gray-700">
+            Tipo de veículo
+          </label>
+          <select id="tipo_veiculo" name="tipo_veiculo" required className={fieldClass} defaultValue="carro">
+            {TIPOS_VEICULO_MODELO.map((t) => (
+              <option key={t} value={t}>
+                {TIPO_VEICULO_MODELO_LABELS[t]}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500">Define se este modelo é de carro, moto ou caminhão.</p>
         </div>
 
         <button

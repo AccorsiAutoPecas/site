@@ -2,6 +2,7 @@ import { createClient } from "@/services/supabase/server";
 import { resolveProductImagePublicUrl } from "@/features/produtos/utils/resolveProductImagePublicUrl";
 import { fetchProductIdsMatchingSearchTerm } from "@/features/produtos/services/productSearchMatchingIds";
 import type { CatalogFilters } from "@/features/produtos/utils/catalogSearchParams";
+import { clampPercent } from "@/features/produtos/utils/paymentDiscount";
 import type { ProductSummary } from "@/types/product";
 
 type ProdutoRow = {
@@ -10,6 +11,9 @@ type ProdutoRow = {
   cod_produto: string;
   valor: unknown;
   foto: string | null;
+  quantidade_estoque: unknown;
+  desconto_pix_percent?: unknown;
+  desconto_cartao_percent?: unknown;
 };
 
 function mapRows(rows: ProdutoRow[]): ProductSummary[] {
@@ -19,6 +23,12 @@ function mapRows(rows: ProdutoRow[]): ProductSummary[] {
     cod_produto: row.cod_produto,
     valor: Number(row.valor),
     imageUrl: resolveProductImagePublicUrl(row.foto),
+    quantidade_estoque: (() => {
+      const q = Number(row.quantidade_estoque);
+      return Number.isFinite(q) ? Math.max(0, Math.floor(q)) : 0;
+    })(),
+    desconto_pix_percent: clampPercent(row.desconto_pix_percent),
+    desconto_cartao_percent: clampPercent(row.desconto_cartao_percent),
   }));
 }
 
@@ -88,6 +98,25 @@ export async function getCatalogProducts(
       }
     }
 
+    if (filters.modeloId) {
+      let compQuery = supabase
+        .from("produto_compatibilidades")
+        .select("produto_id")
+        .eq("modelo_id", filters.modeloId);
+      if (filters.ano != null) {
+        compQuery = compQuery.lte("ano_inicio", filters.ano).gte("ano_fim", filters.ano);
+      }
+      const { data: compRows, error: compErr } = await compQuery;
+      if (compErr || !compRows?.length) return [];
+      const modelSet = new Set(compRows.map((r) => r.produto_id as string));
+      if (candidateIds) {
+        candidateIds = intersect(candidateIds, modelSet);
+        if (candidateIds.length === 0) return [];
+      } else {
+        candidateIds = [...modelSet];
+      }
+    }
+
     const rawSearch = filters.q?.trim();
     if (rawSearch) {
       const searchIds = await fetchProductIdsMatchingSearchTerm(supabase, rawSearch);
@@ -101,7 +130,10 @@ export async function getCatalogProducts(
       }
     }
 
-    let produtosQuery = supabase.from("produtos").select("id, titulo, cod_produto, valor, foto").order("titulo");
+    let produtosQuery = supabase
+      .from("produtos")
+      .select("id, titulo, cod_produto, valor, foto, quantidade_estoque, desconto_pix_percent, desconto_cartao_percent")
+      .order("titulo");
     if (candidateIds) produtosQuery = produtosQuery.in("id", candidateIds);
     if (filters.precoMin != null && filters.precoMin > 0) produtosQuery = produtosQuery.gte("valor", filters.precoMin);
     if (filters.precoMax != null && filters.precoMax < sliderMax) {

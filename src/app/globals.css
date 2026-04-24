@@ -1,3 +1,4 @@
+@import url("https://fonts.cdnfonts.com/css/codec-pro");
 @import "tailwindcss";
 
 :root {
@@ -8,7 +9,8 @@
   --store-navy: #34456b;
   --store-navy-muted: #415074;
   --store-accent: #ff914d;
-  --store-cream: #fdfbf7;
+  /* Fundo principal da vitrine (branco) */
+  --store-cream: #ffffff;
   --store-line: #c9c9c9;
   --store-subtle: #f2f2f2;
 
@@ -19,7 +21,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
   --font-store: "Canva Sans", ui-sans-serif, system-ui, sans-serif;
 
@@ -34,19 +36,45 @@
 
   --color-admin-sidebar: #1a1d29;
   --color-admin-accent: #1d63ed;
-  --color-admin-canvas: #f8f9fa;
+  --color-admin-canvas: #ffffff;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: only light;
 }
 
 body {
-  background: var(--background);
+  background-color: #ffffff;
   color: var(--foreground);
+}
+
+/* Só o título do filtro de veículos — Codec Pro */
+.vehicle-filter-heading {
+  font-family: "Codec Pro", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 900;
+  /* Reforço fino: o webfont do CDN traz só 400; isso deixa o traço mais “cheio” sem borrar */
+  text-shadow:
+    0.5px 0 0 currentColor,
+    -0.5px 0 0 currentColor;
+}
+
+/* Leveza e feedback tátil em botões nativos */
+button:not(:disabled),
+input[type="submit"]:not(:disabled),
+input[type="button"]:not(:disabled),
+input[type="reset"]:not(:disabled) {
+  touch-action: manipulation;
+  transition:
+    transform 0.18s cubic-bezier(0.33, 1, 0.68, 1),
+    box-shadow 0.2s ease,
+    opacity 0.15s ease;
+}
+
+button:not(:disabled):active,
+input[type="submit"]:not(:disabled):active,
+input[type="button"]:not(:disabled):active,
+input[type="reset"]:not(:disabled):active {
+  transform: scale(0.97);
 }
 
 /* Vitrine home: traço vertical laranja só entre cartões, altura total do cartão; linha inferior com folga nas pontas */
@@ -138,4 +166,42 @@ body {
 
 .store-nav-categorias-dropdown {
   animation: store-nav-categorias-reveal 0.2s ease-out both;
+}
+
+/* Home — filtro de veículo: entrada suave ao mudar o layout (busca com/sem texto) */
+@keyframes vehicle-filter-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.45rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes vehicle-filter-slot-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.35rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-vehicle-filter-panel-in {
+  animation: vehicle-filter-panel-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-vehicle-filter-slot-in {
+  animation: vehicle-filter-slot-in 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-vehicle-filter-panel-in,
+  .animate-vehicle-filter-slot-in {
+    animation: none;
+  }
 }

@@ -6,6 +6,8 @@ export type CatalogFilters = {
   marcaIds: string[];
   precoMin: number | null;
   precoMax: number | null;
+  modeloId: string | null;
+  ano: number | null;
 };
 
 function parseCommaList(raw: string | undefined): string[] {
@@ -39,6 +41,26 @@ export function parseProductSearchQ(sp: Record<string, string | string[] | undef
   return t ? t : null;
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Filtro por veículo na home (`?modelo=` e opcionalmente `?ano=`). */
+export function parseHomeVehicleParams(sp: Record<string, string | string[] | undefined>): {
+  modeloId: string | null;
+  anoVeiculo: number | null;
+} {
+  const modeloRaw = typeof sp.modelo === "string" ? sp.modelo : Array.isArray(sp.modelo) ? sp.modelo[0] : undefined;
+  const trimmed = (modeloRaw ?? "").trim();
+  const modeloId = trimmed && UUID_RE.test(trimmed) ? trimmed : null;
+
+  const anoRaw = typeof sp.ano === "string" ? sp.ano : Array.isArray(sp.ano) ? sp.ano[0] : undefined;
+  const anoN = Number.parseInt(String(anoRaw ?? "").trim(), 10);
+  const anoVeiculo =
+    Number.isFinite(anoN) && anoN >= 1900 && anoN <= 2100 ? anoN : null;
+
+  return { modeloId, anoVeiculo };
+}
+
 export function parseCatalogSearchParams(
   sp: Record<string, string | string[] | undefined>
 ): CatalogFilters {
@@ -46,6 +68,9 @@ export function parseCatalogSearchParams(
   const marcasRaw = typeof sp.marcas === "string" ? sp.marcas : undefined;
   const precoMinRaw = typeof sp.preco_min === "string" ? sp.preco_min : undefined;
   const precoMaxRaw = typeof sp.preco_max === "string" ? sp.preco_max : undefined;
+  const modeloRaw = typeof sp.modelo === "string" ? sp.modelo : Array.isArray(sp.modelo) ? sp.modelo[0] : undefined;
+  const anoRaw = typeof sp.ano === "string" ? sp.ano : Array.isArray(sp.ano) ? sp.ano[0] : undefined;
+  const anoN = Number.parseInt(String(anoRaw ?? "").trim(), 10);
 
   return {
     q: parseProductSearchQ(sp),
@@ -53,6 +78,8 @@ export function parseCatalogSearchParams(
     marcaIds: parseCommaList(marcasRaw),
     precoMin: parseNumberParam(precoMinRaw),
     precoMax: parseNumberParam(precoMaxRaw),
+    modeloId: modeloRaw && UUID_RE.test(modeloRaw.trim()) ? modeloRaw.trim() : null,
+    ano: Number.isFinite(anoN) && anoN >= 1900 && anoN <= 2100 ? anoN : null,
   };
 }
 
@@ -68,6 +95,8 @@ export function buildCatalogQueryString(filters: CatalogFilters, sliderMax: numb
     if (min != null && min > 0) p.set("preco_min", String(Math.round(min)));
     if (max != null && max < sliderMax) p.set("preco_max", String(Math.round(max)));
   }
+  if (filters.modeloId) p.set("modelo", filters.modeloId);
+  if (filters.ano != null) p.set("ano", String(filters.ano));
   const s = p.toString();
   return s ? `?${s}` : "";
 }
@@ -77,6 +106,8 @@ export function catalogFiltersActive(filters: CatalogFilters, sliderMax: number)
     Boolean(filters.q?.trim()) ||
     filters.categoriaIds.length > 0 ||
     filters.marcaIds.length > 0 ||
+    Boolean(filters.modeloId) ||
+    filters.ano != null ||
     (filters.precoMin != null && filters.precoMin > 0) ||
     (filters.precoMax != null && filters.precoMax < sliderMax)
   );
@@ -113,6 +144,11 @@ export function catalogFilterSummary(
       .map((id) => marcas.find((m) => m.id === id)?.nome)
       .filter(Boolean) as string[];
     if (names.length) parts.push(`Marcas: ${names.join(", ")}`);
+  }
+  if (filters.modeloId || filters.ano != null) {
+    parts.push(
+      `Veículo: ${filters.modeloId ? "modelo selecionado" : "qualquer modelo"}${filters.ano ? ` · ano ${filters.ano}` : ""}`
+    );
   }
   const pMin = filters.precoMin;
   const pMax = filters.precoMax;

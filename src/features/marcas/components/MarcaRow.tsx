@@ -4,10 +4,10 @@ import { useState, useTransition } from "react";
 import { deleteMarca, updateMarca } from "@/features/marcas/services/marcaActions";
 
 const fieldClass =
-  "w-full min-w-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-admin-accent focus:ring-2 focus:ring-[#1d63ed]/20";
+  "w-full min-w-0 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 outline-none transition focus:border-admin-accent focus:ring-2 focus:ring-[#1d63ed]/20";
 
 const iconBtn =
-  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition disabled:opacity-50";
+  "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition disabled:opacity-50";
 
 export function MarcaRow({ marca }: { marca: { id: string; nome: string } }) {
   const [editing, setEditing] = useState(false);
@@ -49,7 +49,7 @@ export function MarcaRow({ marca }: { marca: { id: string; nome: string } }) {
 
   return (
     <tr className="text-gray-900 transition hover:bg-gray-50/80">
-      <td className="px-6 py-3.5">
+      <td className="px-4 py-2">
         {editing ? (
           <input
             type="text"
@@ -68,7 +68,7 @@ export function MarcaRow({ marca }: { marca: { id: string; nome: string } }) {
             }}
           />
         ) : (
-          <span className="font-medium">{marca.nome}</span>
+          <span className="font-medium leading-snug">{marca.nome}</span>
         )}
         {error && (
           <p className="mt-1 text-xs text-red-600" role="alert">
@@ -76,7 +76,7 @@ export function MarcaRow({ marca }: { marca: { id: string; nome: string } }) {
           </p>
         )}
       </td>
-      <td className="w-[1%] whitespace-nowrap px-4 py-3.5">
+      <td className="w-[1%] whitespace-nowrap px-3 py-2">
         <div className="flex items-center justify-end gap-0.5">
           {editing ? (
             <>
@@ -88,7 +88,7 @@ export function MarcaRow({ marca }: { marca: { id: string; nome: string } }) {
                 aria-label="Salvar"
                 title="Salvar"
               >
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden>
                   <path
                     d="M5 13l4 4L19 7"
                     stroke="currentColor"
@@ -106,7 +106,7 @@ export function MarcaRow({ marca }: { marca: { id: string; nome: string } }) {
                 aria-label="Cancelar edição"
                 title="Cancelar"
               >
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden>
                   <path
                     d="M6 6l12 12M18 6L6 18"
                     stroke="currentColor"
@@ -130,7 +130,7 @@ export function MarcaRow({ marca }: { marca: { id: string; nome: string } }) {
                 aria-label="Editar marca"
                 title="Editar"
               >
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden>
                   <path
                     d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
                     stroke="currentColor"
@@ -148,7 +148,7 @@ export function MarcaRow({ marca }: { marca: { id: string; nome: string } }) {
                 aria-label="Excluir marca"
                 title="Excluir"
               >
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden>
                   <path
                     d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"
                     stroke="currentColor"

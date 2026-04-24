@@ -2,11 +2,16 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import {
+  TIPO_VEICULO_MODELO_LABELS,
+  type TipoVeiculoModelo,
+} from "@/features/compatibilidade/constants/tipoVeiculoModelo";
 
 export type ModeloOption = {
   id: string;
   nome: string;
   marca_nome: string;
+  tipo_veiculo: TipoVeiculoModelo;
   /** Anos cadastrados em «Marcas e modelos» (modelo_anos), ordenados. */
   anos_referencia: number[];
 };
@@ -98,9 +103,76 @@ export function ProductCompatibilidadeFieldset({
     initialRows && initialRows.length > 0 ? compatRowsFromServer(initialRows) : [emptyRow()]
   );
 
+  const [pickerQuery, setPickerQuery] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(true);
+  const [pickerChecked, setPickerChecked] = useState<Set<string>>(() => new Set());
+
   const modelosById = useMemo(() => new Map(modelos.map((m) => [m.id, m])), [modelos]);
 
   const compatJson = useMemo(() => rowsToCompatJson(rows), [rows]);
+
+  const existingModeloIds = useMemo(
+    () => new Set(rows.map((r) => r.modelo_id).filter(Boolean)),
+    [rows]
+  );
+
+  const modelosFiltradosPicker = useMemo(() => {
+    const q = pickerQuery.trim().toLowerCase();
+    if (!q) return modelos;
+    return modelos.filter((m) => {
+      const tipo = TIPO_VEICULO_MODELO_LABELS[m.tipo_veiculo];
+      const hay = `${m.nome} ${m.marca_nome} ${tipo}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [modelos, pickerQuery]);
+
+  function togglePickerId(id: string) {
+    setPickerChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selecionarTodosFiltrados() {
+    setPickerChecked((prev) => {
+      const next = new Set(prev);
+      for (const m of modelosFiltradosPicker) {
+        if (!existingModeloIds.has(m.id)) next.add(m.id);
+      }
+      return next;
+    });
+  }
+
+  function limparSelecaoPicker() {
+    setPickerChecked(new Set());
+  }
+
+  function adicionarModelosSelecionados() {
+    const ids = [...pickerChecked].filter((id) => modelosById.has(id) && !existingModeloIds.has(id));
+    if (ids.length === 0) {
+      setPickerChecked(new Set());
+      return;
+    }
+    const novasLinhas: CompatRowState[] = ids.map((modelo_id) => ({
+      key: newKey(),
+      modelo_id,
+      ano_inicio: "",
+      ano_fim: "",
+    }));
+
+    setRows((prev) => {
+      const isOnlyBlank =
+        prev.length === 1 &&
+        !prev[0].modelo_id &&
+        !prev[0].ano_inicio.trim() &&
+        !prev[0].ano_fim.trim();
+      if (isOnlyBlank) return novasLinhas;
+      return [...prev, ...novasLinhas];
+    });
+    setPickerChecked(new Set());
+  }
 
   function addRow() {
     setRows((r) => [...r, emptyRow()]);
@@ -133,6 +205,120 @@ export function ProductCompatibilidadeFieldset({
           deixe apenas linhas em branco.
         </p>
       )}
+
+      <div className="mb-4 rounded-lg border border-admin-accent/25 bg-white/90 p-3 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setPickerOpen((o) => !o)}
+          className="flex w-full items-center justify-between gap-2 text-left text-sm font-semibold text-gray-900"
+          aria-expanded={pickerOpen}
+        >
+          <span>Adicionar vários modelos</span>
+          <span className="text-xs font-normal text-gray-500">{pickerOpen ? "Ocultar" : "Mostrar"}</span>
+        </button>
+        {pickerOpen && (
+          <div className="mt-3 space-y-3 border-t border-gray-100 pt-3">
+            <p className="text-xs text-gray-500">
+              Pesquise por nome do modelo, marca ou tipo. Marque os itens e clique em adicionar; modelos já
+              listados abaixo não são duplicados.
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-3">
+              <div className="min-w-0 flex-1">
+                <label htmlFor="compat-picker-busca" className="mb-1 block text-xs font-medium text-gray-700">
+                  Buscar modelos
+                </label>
+                <input
+                  id="compat-picker-busca"
+                  type="search"
+                  autoComplete="off"
+                  placeholder="Ex.: Civic, Fiat, moto…"
+                  value={pickerQuery}
+                  onChange={(e) => setPickerQuery(e.target.value)}
+                  className={fieldClass + " w-full"}
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={selecionarTodosFiltrados}
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-800 hover:bg-gray-50"
+                >
+                  Selecionar visíveis
+                </button>
+                <button
+                  type="button"
+                  onClick={limparSelecaoPicker}
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-800 hover:bg-gray-50"
+                >
+                  Limpar seleção
+                </button>
+              </div>
+            </div>
+            <div
+              className="max-h-56 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50/80 p-2"
+              role="group"
+              aria-label="Modelos para seleção em massa"
+            >
+              {modelosFiltradosPicker.length === 0 ? (
+                <p className="px-2 py-4 text-center text-sm text-gray-500">Nenhum modelo com esse termo.</p>
+              ) : (
+                <ul className="space-y-1">
+                  {modelosFiltradosPicker.map((m) => {
+                    const jaNaLista = existingModeloIds.has(m.id);
+                    const marcado = pickerChecked.has(m.id);
+                    return (
+                      <li key={`pick-${m.id}`}>
+                        <label
+                          className={`flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-sm ${
+                            jaNaLista ? "text-gray-400" : "hover:bg-white"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 shrink-0 rounded border-gray-300"
+                            checked={marcado}
+                            disabled={jaNaLista}
+                            onChange={() => togglePickerId(m.id)}
+                          />
+                          <span>
+                            <span className="font-medium text-gray-900">{m.marca_nome}</span>
+                            <span className="text-gray-600"> — {m.nome}</span>
+                            <span className="text-gray-500">
+                              {" "}
+                              · {TIPO_VEICULO_MODELO_LABELS[m.tipo_veiculo]}
+                            </span>
+                            {m.anos_referencia.length === 0 && (
+                              <span className="text-amber-700"> (sem anos cadastrados)</span>
+                            )}
+                            {jaNaLista && (
+                              <span className="ml-1 text-xs text-gray-500">— já na lista</span>
+                            )}
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={adicionarModelosSelecionados}
+                className="rounded-lg bg-admin-accent px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#1857d1]"
+              >
+                Adicionar selecionados à compatibilidade
+              </button>
+              <span className="text-xs text-gray-500">
+                {pickerChecked.size > 0
+                  ? `${pickerChecked.size} selecionado(s) na busca`
+                  : "Nenhuma caixa marcada"}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
       <input type="hidden" name="compat_json" value={compatJson} aria-hidden />
 
       <ul className="flex flex-col gap-4">
@@ -183,7 +369,7 @@ export function ProductCompatibilidadeFieldset({
                     <option value="">— Nenhum —</option>
                     {modelos.map((m) => (
                       <option key={m.id} value={m.id}>
-                        {m.marca_nome} — {m.nome}
+                        {m.marca_nome} — {m.nome} · {TIPO_VEICULO_MODELO_LABELS[m.tipo_veiculo]}
                         {m.anos_referencia.length === 0 ? " (sem anos cadastrados)" : ""}
                       </option>
                     ))}

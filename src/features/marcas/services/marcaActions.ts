@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { slugify } from "@/utils/slugify";
 import { createClient } from "@/services/supabase/server";
 import { revalidatePath } from "next/cache";
@@ -33,6 +34,7 @@ export async function createMarca(
   _prev: CreateMarcaState,
   formData: FormData
 ): Promise<CreateMarcaState> {
+  await requireAdmin();
   const nome = String(formData.get("nome") ?? "").trim();
 
   if (!nome) {
@@ -69,6 +71,7 @@ export async function createMarca(
 export type UpdateMarcaResult = { ok: true } | { ok: false; message: string };
 
 export async function updateMarca(formData: FormData): Promise<UpdateMarcaResult> {
+  await requireAdmin();
   const id = String(formData.get("id") ?? "").trim();
   const nome = String(formData.get("nome") ?? "").trim();
 
@@ -106,6 +109,7 @@ export async function updateMarca(formData: FormData): Promise<UpdateMarcaResult
 export type DeleteMarcaResult = { ok: true } | { ok: false; message: string };
 
 export async function deleteMarca(marcaId: string): Promise<DeleteMarcaResult> {
+  await requireAdmin();
   const id = marcaId.trim();
   if (!id) {
     return { ok: false, message: "Marca inválida." };

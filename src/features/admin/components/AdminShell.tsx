@@ -6,10 +6,15 @@ import { useState } from "react";
 
 function pageTitle(pathname: string): string {
   if (pathname === "/admin") return "Visão geral";
+  if (pathname === "/admin/produtos") return "Produtos";
+  if (pathname === "/admin/pedidos") return "Pedidos";
+  if (/^\/admin\/pedidos\/[^/]+$/.test(pathname)) return "Detalhe do pedido";
   if (pathname === "/admin/marcas-e-modelos") return "Marcas e modelos";
   if (pathname === "/admin/marcas") return "Marcas e modelos";
   if (pathname === "/admin/modelos") return "Marcas e modelos";
   if (pathname === "/admin/categorias") return "Categorias";
+  if (pathname === "/admin/layout") return "Layout do site";
+  if (pathname === "/admin/clientes") return "Clientes";
   if (pathname === "/admin/produtos/novo") return "Cadastrar produto";
   if (/^\/admin\/produtos\/[^/]+\/edit$/.test(pathname)) return "Editar produto";
   return "Painel";
@@ -56,20 +61,6 @@ function IconPackage({ className }: { className?: string }) {
   );
 }
 
-function IconCart({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M6 6h15l-1.5 9h-12L6 6zm0 0L5 3H2M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm8 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 function IconUsers({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -97,6 +88,18 @@ function IconLayers({ className }: { className?: string }) {
   );
 }
 
+function IconLayoutPanel({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M4 5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5zm10 0h6a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM4 15a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4zm10 0h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1z"
+        fill="currentColor"
+        opacity="0.9"
+      />
+    </svg>
+  );
+}
+
 function IconTag({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -108,6 +111,22 @@ function IconTag({ className }: { className?: string }) {
         strokeLinejoin="round"
       />
       <circle cx="7.5" cy="7.5" r="1.25" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IconShoppingCart({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M3 4h2l2.2 10.1a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 7H7"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="10" cy="19" r="1.5" fill="currentColor" />
+      <circle cx="17" cy="19" r="1.5" fill="currentColor" />
     </svg>
   );
 }
@@ -145,11 +164,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const title = pageTitle(pathname);
   const overviewActive = pathname === "/admin";
   const productsActive = pathname.startsWith("/admin/produtos");
+  const pedidosActive = pathname.startsWith("/admin/pedidos");
   const marcasModelosActive =
     pathname.startsWith("/admin/marcas-e-modelos") ||
     pathname.startsWith("/admin/marcas") ||
     pathname.startsWith("/admin/modelos");
   const categoriasActive = pathname.startsWith("/admin/categorias");
+  const layoutSiteActive = pathname.startsWith("/admin/layout");
+  const clientesActive = pathname.startsWith("/admin/clientes");
 
   const navLinkClass = (active: boolean) =>
     [
@@ -192,7 +214,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <IconOverview className="h-5 w-5 shrink-0 opacity-80" />
             Visão geral
           </Link>
-          <Link href="/admin/produtos/novo" className={navLinkClass(productsActive)}>
+          <Link href="/admin/produtos" className={navLinkClass(productsActive)}>
             <IconPackage className="h-5 w-5 shrink-0 opacity-80" />
             Produtos
           </Link>
@@ -204,22 +226,18 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <IconTag className="h-5 w-5 shrink-0 opacity-80" />
             Categorias
           </Link>
-          <span
-            className={navLinkClass(false) + " cursor-not-allowed opacity-50"}
-            title="Em breve"
-            aria-disabled
-          >
-            <IconCart className="h-5 w-5 shrink-0 opacity-80" />
-            Vendas
-          </span>
-          <span
-            className={navLinkClass(false) + " cursor-not-allowed opacity-50"}
-            title="Em breve"
-            aria-disabled
-          >
+          <Link href="/admin/layout" className={navLinkClass(layoutSiteActive)}>
+            <IconLayoutPanel className="h-5 w-5 shrink-0 opacity-80" />
+            Layout
+          </Link>
+          <Link href="/admin/pedidos" className={navLinkClass(pedidosActive)}>
+            <IconShoppingCart className="h-5 w-5 shrink-0 opacity-80" />
+            Pedidos
+          </Link>
+          <Link href="/admin/clientes" className={navLinkClass(clientesActive)}>
             <IconUsers className="h-5 w-5 shrink-0 opacity-80" />
             Clientes
-          </span>
+          </Link>
         </nav>
       </aside>
 
@@ -241,10 +259,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             {pathname === "/admin" && (
               <Link
-                href="/admin/produtos/novo"
+                href="/admin/produtos"
                 className="hidden rounded-lg bg-admin-accent px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#1857d1] sm:inline-flex"
               >
-                Criar novo produto
+                Gerenciar produtos
               </Link>
             )}
             <button
@@ -266,10 +284,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         {pathname === "/admin" && (
           <div className="border-b border-gray-200/80 bg-white px-4 py-3 sm:hidden">
             <Link
-              href="/admin/produtos/novo"
+              href="/admin/produtos"
               className="flex w-full items-center justify-center rounded-lg bg-admin-accent py-2.5 text-sm font-medium text-white"
             >
-              Criar novo produto
+              Gerenciar produtos
             </Link>
           </div>
         )}

@@ -2,8 +2,9 @@ import Link from "next/link";
 import { createClient } from "@/services/supabase/server";
 import { MarcaForm } from "@/features/marcas/components/MarcaForm";
 import { MarcaRow } from "@/features/marcas/components/MarcaRow";
-import { ModeloAnosCell } from "@/features/compatibilidade/components/ModeloAnosCell";
 import { ModeloForm, type MarcaOption } from "@/features/compatibilidade/components/ModeloForm";
+import { ModeloTableRow } from "@/features/compatibilidade/components/ModeloTableRow";
+import { ModelosListagemFiltros } from "@/features/compatibilidade/components/ModelosListagemFiltros";
 
 export const metadata = {
   title: "Marcas e modelos | Admin",
@@ -25,7 +26,9 @@ type MarcaListRow = {
 
 type ModeloRow = {
   id: string;
+  marca_id: string;
   nome: string;
+  tipo_veiculo: string | null;
   marcas: unknown;
 };
 
@@ -38,11 +41,13 @@ type ModeloAnoRow = {
 export default async function MarcasEModelosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cadastrado?: string }>;
+  searchParams: Promise<{ cadastrado?: string; buscaModelo?: string; marcaModelo?: string }>;
 }) {
-  const { cadastrado } = await searchParams;
+  const { cadastrado, buscaModelo, marcaModelo } = await searchParams;
   const showMarcaOk = cadastrado === "marca";
   const showModeloOk = cadastrado === "modelo";
+  const modeloSearchTerm = (buscaModelo ?? "").trim();
+  const marcaModeloFiltro = (marcaModelo ?? "").trim();
 
   let marcas: MarcaListRow[] = [];
   let marcasForSelect: MarcaOption[] = [];
@@ -70,7 +75,7 @@ export default async function MarcasEModelosPage({
 
     const { data: modelosData, error: modelosErr } = await supabase
       .from("modelos")
-      .select("id, nome, marcas ( nome )")
+      .select("id, marca_id, nome, tipo_veiculo, marcas ( nome )")
       .order("nome");
 
     if (modelosErr) {
@@ -96,6 +101,24 @@ export default async function MarcasEModelosPage({
   } catch (e) {
     configError = e instanceof Error ? e.message : "Erro ao carregar configuração.";
   }
+
+  const marcaFiltroValido =
+    marcaModeloFiltro.length > 0 && marcas.some((x) => x.id === marcaModeloFiltro);
+  const marcaSelectValue = marcaFiltroValido ? marcaModeloFiltro : "";
+
+  const modelosPorMarca = marcaFiltroValido
+    ? modelos.filter((m) => m.marca_id === marcaModeloFiltro)
+    : modelos;
+
+  const modeloSearchTermNormalized = modeloSearchTerm.toLocaleLowerCase("pt-BR");
+  const modelosFiltrados =
+    modeloSearchTermNormalized.length > 0
+      ? modelosPorMarca.filter((m) => {
+          const marca = marcaNomeFromRow(m.marcas);
+          const haystack = `${m.nome} ${marca} ${m.tipo_veiculo ?? ""}`.toLocaleLowerCase("pt-BR");
+          return haystack.includes(modeloSearchTermNormalized);
+        })
+      : modelosPorMarca;
 
   return (
     <div className="space-y-12">
@@ -166,28 +189,28 @@ export default async function MarcasEModelosPage({
 
           {!configError && (
             <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-              <div className="border-b border-gray-100 px-6 py-4">
-                <h3 className="text-base font-semibold text-gray-900">Marcas cadastradas</h3>
-                <p className="mt-0.5 text-sm text-gray-500">Edite ou remova; modelos vinculados bloqueiam exclusão.</p>
+              <div className="border-b border-gray-100 px-4 py-2.5">
+                <h3 className="text-sm font-semibold text-gray-900">Marcas cadastradas</h3>
+                <p className="mt-0.5 text-xs text-gray-500">Edite ou remova; modelos vinculados bloqueiam exclusão.</p>
               </div>
 
               {marcasError && (
-                <p className="px-6 py-6 text-sm text-red-700">Erro ao listar marcas: {marcasError}</p>
+                <p className="px-4 py-4 text-xs text-red-700">Erro ao listar marcas: {marcasError}</p>
               )}
 
               {!marcasError && marcas.length === 0 && (
-                <p className="px-6 py-10 text-center text-sm text-gray-500">
+                <p className="px-4 py-8 text-center text-xs text-gray-500">
                   Nenhuma marca ainda. Cadastre a primeira ao lado para habilitar modelos.
                 </p>
               )}
 
               {!marcasError && marcas.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[320px] text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-100 bg-gray-50/80 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        <th className="px-6 py-3">Nome</th>
-                        <th className="w-[1%] px-4 py-3 text-right font-semibold normal-case tracking-normal">
+                <div className="max-h-[min(50vh,18rem)] overflow-auto">
+                  <table className="w-full min-w-[280px] text-left text-xs">
+                    <thead className="sticky top-0 z-[1]">
+                      <tr className="border-b border-gray-100 bg-gray-50/95 text-[10px] font-semibold uppercase tracking-wide text-gray-500 backdrop-blur-sm">
+                        <th className="px-4 py-2">Nome</th>
+                        <th className="w-[1%] px-3 py-2 text-right font-semibold normal-case tracking-normal">
                           <span className="sr-only">Ações</span>
                         </th>
                       </tr>
@@ -219,7 +242,9 @@ export default async function MarcasEModelosPage({
           {!configError && (
             <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
               <h3 className="text-base font-semibold text-gray-900">Novo modelo</h3>
-              <p className="mt-1 text-sm text-gray-500">Escolha a marca e informe o nome do modelo.</p>
+              <p className="mt-1 text-sm text-gray-500">
+                Escolha a marca, o tipo (carro, moto ou caminhão) e informe o nome do modelo.
+              </p>
               <div className="mt-6">
                 {marcasForSelect.length === 0 && !marcasError ? (
                   <p className="text-sm text-gray-600">
@@ -234,11 +259,17 @@ export default async function MarcasEModelosPage({
 
           {!configError && (
             <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-              <div className="border-b border-gray-100 px-6 py-4">
-                <h3 className="text-base font-semibold text-gray-900">Modelos cadastrados</h3>
-                <p className="mt-0.5 text-sm text-gray-500">
+              <div className="border-b border-gray-100 px-4 py-2.5">
+                <h3 className="text-sm font-semibold text-gray-900">Modelos cadastrados</h3>
+                <p className="mt-0.5 text-xs text-gray-500">
                   Anos de referência por modelo; a compatibilidade do produto usa ano inicial e final.
                 </p>
+                <ModelosListagemFiltros
+                  key={`${marcaSelectValue}\0${modeloSearchTerm}`}
+                  marcas={marcas}
+                  defaultMarcaId={marcaSelectValue}
+                  defaultBusca={modeloSearchTerm}
+                />
                 {modeloAnosError && (
                   <p className="mt-2 text-xs text-amber-800">
                     Não foi possível carregar anos de referência ({modeloAnosError}). Se a tabela ainda não existe,
@@ -250,11 +281,11 @@ export default async function MarcasEModelosPage({
               </div>
 
               {modelosError && (
-                <p className="px-6 py-6 text-sm text-red-700">Erro ao listar modelos: {modelosError}</p>
+                <p className="px-4 py-4 text-xs text-red-700">Erro ao listar modelos: {modelosError}</p>
               )}
 
               {!modelosError && modelos.length === 0 && (
-                <p className="px-6 py-10 text-center text-sm text-gray-500">
+                <p className="px-4 py-8 text-center text-xs text-gray-500">
                   Nenhum modelo ainda. Cadastre o primeiro ao lado ou em{" "}
                   <Link href="/admin/produtos/novo" className="font-medium text-admin-accent hover:underline">
                     novo produto
@@ -263,29 +294,45 @@ export default async function MarcasEModelosPage({
                 </p>
               )}
 
-              {!modelosError && modelos.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[400px] text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-100 bg-gray-50/80 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        <th className="px-6 py-3">Marca</th>
-                        <th className="px-6 py-3">Modelo</th>
-                        <th className="min-w-[14rem] px-6 py-3">Anos de referência</th>
+              {!modelosError && modelos.length > 0 && modelosFiltrados.length === 0 && (
+                <p className="px-4 py-8 text-center text-xs text-gray-500">
+                  Nenhum modelo encontrado
+                  {marcaFiltroValido && <> para a marca selecionada</>}
+                  {modeloSearchTermNormalized.length > 0 && (
+                    <>
+                      {" "}
+                      com a busca <span className="font-medium">&quot;{modeloSearchTerm}&quot;</span>
+                    </>
+                  )}
+                  .
+                </p>
+              )}
+
+              {!modelosError && modelosFiltrados.length > 0 && (
+                <div className="max-h-[min(55vh,22rem)] overflow-auto">
+                  <table className="w-full min-w-[480px] text-left text-xs">
+                    <thead className="sticky top-0 z-[1]">
+                      <tr className="border-b border-gray-100 bg-gray-50/95 text-[10px] font-semibold uppercase tracking-wide text-gray-500 backdrop-blur-sm">
+                        <th className="px-4 py-2">Marca</th>
+                        <th className="px-4 py-2">Modelo</th>
+                        <th className="whitespace-nowrap px-4 py-2">Tipo</th>
+                        <th className="min-w-[12rem] px-4 py-2">Anos de referência</th>
+                        <th className="w-[1%] px-3 py-2 text-right font-semibold normal-case tracking-normal">
+                          <span className="sr-only">Ações</span>
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {modelos.map((m) => (
-                        <tr key={m.id} className="align-top text-gray-900 transition hover:bg-gray-50/80">
-                          <td className="px-6 py-3.5">{marcaNomeFromRow(m.marcas)}</td>
-                          <td className="px-6 py-3.5 font-medium">{m.nome}</td>
-                          <td className="px-6 py-3.5">
-                            {!modeloAnosError ? (
-                              <ModeloAnosCell modeloId={m.id} anos={anosByModelo.get(m.id) ?? []} />
-                            ) : (
-                              <span className="text-xs text-gray-400">—</span>
-                            )}
-                          </td>
-                        </tr>
+                      {modelosFiltrados.map((m) => (
+                        <ModeloTableRow
+                          key={m.id}
+                          modeloId={m.id}
+                          nome={m.nome}
+                          tipoVeiculo={m.tipo_veiculo}
+                          marcaNome={marcaNomeFromRow(m.marcas)}
+                          anos={anosByModelo.get(m.id) ?? []}
+                          modeloAnosError={Boolean(modeloAnosError)}
+                        />
                       ))}
                     </tbody>
                   </table>

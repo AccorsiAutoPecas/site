@@ -1,23 +1,12 @@
-import { ProductDestaqueStarForm } from "@/features/produtos/components/ProductDestaqueStarForm";
-import { ProductRowActions } from "@/features/produtos/components/ProductRowActions";
-import { createClient } from "@/services/supabase/server";
+import Link from "next/link";
+
+import { SiteMaintenanceCard } from "@/features/admin/components/SiteMaintenanceCard";
+import { formatPedidoDate, formatPedidoMoney, formatPedidoStatus } from "@/features/pedidos/utils/pedidoDisplay";
+import { listPedidosAdmin } from "@/features/pedidos-admin/services/listPedidosAdmin";
+import type { AdminPedidoListRow } from "@/types/pedido";
 
 export const metadata = {
   title: "Visão geral | Admin",
-};
-
-const money = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-});
-
-type ProdutoRow = {
-  id: string;
-  titulo: string;
-  cod_produto: string;
-  valor: number;
-  quantidade_estoque: number;
-  em_destaque: boolean;
 };
 
 function KpiCard({
@@ -95,41 +84,45 @@ function IconTrend() {
   );
 }
 
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
 export default async function AdminDashboardPage() {
-  let produtos: ProdutoRow[] = [];
   let configError: string | null = null;
   let loadError: string | null = null;
+  let pedidos: AdminPedidoListRow[] = [];
 
   try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("produtos")
-      .select("id, titulo, cod_produto, valor, quantidade_estoque, em_destaque")
-      .order("titulo");
-
-    if (error) {
-      loadError = error.message;
-    } else if (data) {
-      produtos = (data as ProdutoRow[]).map((row) => ({
-        ...row,
-        em_destaque: Boolean(row.em_destaque),
-      }));
-    }
+    pedidos = await listPedidosAdmin();
   } catch (e) {
-    configError = e instanceof Error ? e.message : "Erro ao carregar configuração.";
+    const message = e instanceof Error ? e.message : "Erro ao carregar painel.";
+    configError =
+      message.includes("SUPABASE_SERVICE_ROLE_KEY") || message.includes("NEXT_PUBLIC_SUPABASE_URL")
+        ? message
+        : null;
+    loadError = configError ? null : message;
   }
 
-  const n = produtos.length;
-  const totalItens = produtos.reduce((s, p) => s + Number(p.quantidade_estoque), 0);
-  const valorEstoque = produtos.reduce(
-    (s, p) => s + Number(p.valor) * Number(p.quantidade_estoque),
-    0
-  );
-  const precoMedio = n > 0 ? produtos.reduce((s, p) => s + Number(p.valor), 0) / n : 0;
-  const esgotados = produtos.filter((p) => Number(p.quantidade_estoque) <= 0).length;
+  const hoje = new Date();
+  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const pedidosPagos = pedidos.filter((p) => p.status === "pago");
+  const receitaTotal = pedidosPagos.reduce((acc, p) => acc + Number(p.total), 0);
+  const receitaMes = pedidosPagos
+    .filter((p) => new Date(p.created_at) >= inicioMes)
+    .reduce((acc, p) => acc + Number(p.total), 0);
+  const vendasHoje = pedidosPagos.filter((p) => isSameDay(new Date(p.created_at), hoje)).length;
+  const ticketMedio = pedidosPagos.length > 0 ? receitaTotal / pedidosPagos.length : 0;
+  const ultimasVendas = pedidos.slice(0, 8);
 
   return (
     <div className="space-y-6">
+      <SiteMaintenanceCard />
+
       {configError && (
         <div
           className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm"
@@ -140,7 +133,7 @@ export default async function AdminDashboardPage() {
           <p className="mt-2 text-xs text-amber-800/80">
             Crie <code className="rounded bg-black/5 px-1">.env</code> ou{" "}
             <code className="rounded bg-black/5 px-1">.env.local</code> com NEXT_PUBLIC_SUPABASE_URL e
-            NEXT_PUBLIC_SUPABASE_ANON_KEY.
+            SUPABASE_SERVICE_ROLE_KEY.
           </p>
         </div>
       )}
@@ -159,96 +152,92 @@ export default async function AdminDashboardPage() {
         <>
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard
-              label="Produtos no catálogo"
-              value={String(n)}
-              hint="SKUs cadastrados"
-            >
-              <IconBoxes />
-            </KpiCard>
-            <KpiCard
-              label="Unidades em estoque"
-              value={totalItens.toLocaleString("pt-BR")}
-              hint="Soma das quantidades"
-            >
-              <IconStack />
-            </KpiCard>
-            <KpiCard
-              label="Valor em estoque"
-              value={money.format(valorEstoque)}
-              hint="Preço × quantidade"
+              label="Receita total"
+              value={formatPedidoMoney(receitaTotal)}
+              hint="Somente pedidos pagos"
             >
               <IconCurrency />
             </KpiCard>
             <KpiCard
-              label="Preço médio"
-              value={money.format(precoMedio)}
-              hint={
-                esgotados > 0
-                  ? `${esgotados} sem estoque`
-                  : "Média dos preços unitários"
-              }
+              label="Receita do mês"
+              value={formatPedidoMoney(receitaMes)}
+              hint="Mês atual"
             >
               <IconTrend />
+            </KpiCard>
+            <KpiCard
+              label="Vendas hoje"
+              value={String(vendasHoje)}
+              hint="Pedidos pagos no dia"
+            >
+              <IconBoxes />
+            </KpiCard>
+            <KpiCard
+              label="Ticket médio"
+              value={formatPedidoMoney(ticketMedio)}
+              hint="Média por pedido pago"
+            >
+              <IconStack />
             </KpiCard>
           </section>
 
           <section className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-            <div className="border-b border-gray-100 px-6 py-4">
-              <h2 className="text-base font-semibold text-gray-900">Produtos cadastrados</h2>
-              <p className="mt-0.5 text-sm text-gray-500">Lista do catálogo e ações rápidas</p>
+            <div className="flex flex-col gap-4 border-b border-gray-100 px-6 py-4 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
+              <div className="min-w-0 shrink">
+                <h2 className="text-base font-semibold text-gray-900">Últimas vendas</h2>
+                <p className="mt-0.5 text-sm text-gray-500">Acompanhe os pedidos mais recentes</p>
+              </div>
+              <Link
+                href="/admin/pedidos"
+                className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                Ver todos os pedidos
+              </Link>
             </div>
 
-            {produtos.length === 0 ? (
+            {ultimasVendas.length === 0 ? (
               <p className="px-6 py-10 text-center text-sm text-gray-500">
-                Nenhum produto ainda. Use <span className="font-medium text-admin-accent">Criar novo produto</span>{" "}
-                no topo.
+                Nenhum pedido encontrado ainda.
               </p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px] text-left text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50/80 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      <th className="w-14 px-2 py-3 text-center text-amber-500" scope="col">
-                        <span className="sr-only">Destaque na home</span>
-                        <span aria-hidden>★</span>
-                      </th>
-                      <th className="px-6 py-3">Produto</th>
-                      <th className="px-6 py-3">Código</th>
-                      <th className="px-6 py-3 text-right">Valor</th>
-                      <th className="px-6 py-3 text-right">Estoque</th>
-                      <th className="px-6 py-3 text-center">Status</th>
+                      <th className="px-6 py-3">Data</th>
+                      <th className="px-6 py-3">Cliente</th>
+                      <th className="px-6 py-3">Pagamento</th>
+                      <th className="px-6 py-3 text-right">Total</th>
                       <th className="px-6 py-3 text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {produtos.map((p) => {
-                      const q = Number(p.quantidade_estoque);
-                      const inStock = q > 0;
+                    {ultimasVendas.map((p) => {
                       return (
                         <tr key={p.id} className="text-gray-900 transition hover:bg-gray-50/80">
-                          <td className="px-2 py-4">
-                            <ProductDestaqueStarForm productId={p.id} emDestaque={p.em_destaque} />
-                          </td>
-                          <td className="px-6 py-4 font-medium">{p.titulo}</td>
-                          <td className="px-6 py-4 font-mono text-xs text-gray-600">{p.cod_produto}</td>
-                          <td className="px-6 py-4 text-right tabular-nums font-medium">
-                            {money.format(Number(p.valor))}
-                          </td>
-                          <td className="px-6 py-4 text-right tabular-nums text-gray-700">{q}</td>
-                          <td className="px-6 py-4 text-center">
+                          <td className="px-6 py-4 text-gray-600">{formatPedidoDate(p.created_at)}</td>
+                          <td className="px-6 py-4 font-medium">{p.destinatario_nome}</td>
+                          <td className="px-6 py-4">
                             <span
-                              className={[
-                                "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium",
-                                inStock
-                                  ? "bg-[#1d63ed]/12 text-[#1d63ed]"
-                                  : "bg-gray-100 text-gray-600",
-                              ].join(" ")}
+                              className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                                p.status === "pago"
+                                  ? "bg-emerald-50 text-emerald-800"
+                                  : "bg-gray-100 text-gray-700"
+                              }`}
                             >
-                              {inStock ? "Em estoque" : "Esgotado"}
+                              {formatPedidoStatus(p.status)}
                             </span>
                           </td>
+                          <td className="px-6 py-4 text-right tabular-nums font-medium">
+                            {formatPedidoMoney(p.total)}
+                          </td>
                           <td className="px-6 py-4 text-right">
-                            <ProductRowActions productId={p.id} />
+                            <Link
+                              href={`/admin/pedidos/${p.id}`}
+                              className="font-medium text-admin-accent hover:underline"
+                            >
+                              Abrir
+                            </Link>
                           </td>
                         </tr>
                       );

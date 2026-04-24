@@ -1,7 +1,10 @@
 "use client";
 
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { deleteCategoria, updateCategoria } from "@/features/categorias/services/categoriaActions";
+import { CategoriaIconeField } from "@/features/categorias/components/CategoriaIconeField";
 
 const fieldClass =
   "w-full min-w-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-admin-accent focus:ring-2 focus:ring-[#1d63ed]/20";
@@ -9,14 +12,29 @@ const fieldClass =
 const iconBtn =
   "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition disabled:opacity-50";
 
-export function CategoriaRow({ categoria }: { categoria: { id: string; nome: string } }) {
+function thumbSrc(icone: string | null): string | null {
+  if (!icone?.trim()) return null;
+  const t = icone.trim();
+  if (/^https?:\/\//i.test(t)) return t;
+  return t.startsWith("/") ? t : `/${t}`;
+}
+
+export function CategoriaRow({
+  categoria,
+}: {
+  categoria: { id: string; nome: string; icone: string | null };
+}) {
+  const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [nome, setNome] = useState(categoria.nome);
+  const [iconeDraft, setIconeDraft] = useState<string | null>(categoria.icone);
+  const [iconBusy, setIconBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function cancelEdit() {
     setNome(categoria.nome);
+    setIconeDraft(categoria.icone);
     setEditing(false);
     setError(null);
   }
@@ -26,6 +44,7 @@ export function CategoriaRow({ categoria }: { categoria: { id: string; nome: str
     const fd = new FormData();
     fd.set("id", categoria.id);
     fd.set("nome", nome.trim());
+    fd.set("icone", iconeDraft ?? "");
     startTransition(async () => {
       const r = await updateCategoria(fd);
       if (r.ok === false) {
@@ -33,6 +52,7 @@ export function CategoriaRow({ categoria }: { categoria: { id: string; nome: str
         return;
       }
       setEditing(false);
+      router.refresh();
     });
   }
 
@@ -44,30 +64,65 @@ export function CategoriaRow({ categoria }: { categoria: { id: string; nome: str
       const r = await deleteCategoria(categoria.id);
       if (r.ok === false) {
         setError(r.message);
+        return;
       }
+      router.refresh();
     });
   }
 
+  const thumb = thumbSrc(categoria.icone);
+
   return (
     <tr className="text-gray-900 transition hover:bg-gray-50/80">
+      <td className="w-14 px-4 py-3.5 align-middle">
+        {!editing && (
+          <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg border border-gray-100 bg-white">
+            {thumb ? (
+              <Image
+                src={thumb}
+                alt=""
+                width={40}
+                height={40}
+                className="h-full w-full object-contain"
+                unoptimized
+              />
+            ) : (
+              <span className="text-[10px] text-gray-300">—</span>
+            )}
+          </span>
+        )}
+      </td>
       <td className="px-6 py-3.5">
         {editing ? (
-          <input
-            type="text"
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            className={fieldClass}
-            disabled={pending}
-            autoFocus
-            aria-label="Nome da categoria"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleSave();
-              }
-              if (e.key === "Escape") cancelEdit();
-            }}
-          />
+          <div className="space-y-3">
+            <input
+              type="text"
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              className={fieldClass}
+              disabled={pending || iconBusy}
+              autoFocus
+              aria-label="Nome da categoria"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleSave();
+                }
+                if (e.key === "Escape") cancelEdit();
+              }}
+            />
+            <div>
+              <p className="mb-1 text-xs font-medium text-gray-600">Ícone</p>
+              <CategoriaIconeField
+                key={categoria.id}
+                defaultUrl={categoria.icone}
+                replaceRef={categoria.icone}
+                disabled={pending}
+                onBusyChange={setIconBusy}
+                onUrlChange={setIconeDraft}
+              />
+            </div>
+          </div>
         ) : (
           <span className="font-medium">{categoria.nome}</span>
         )}
@@ -84,7 +139,7 @@ export function CategoriaRow({ categoria }: { categoria: { id: string; nome: str
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={pending}
+                disabled={pending || iconBusy}
                 className={`${iconBtn} text-emerald-700 hover:bg-emerald-50`}
                 aria-label="Salvar"
                 title="Salvar"
@@ -102,7 +157,7 @@ export function CategoriaRow({ categoria }: { categoria: { id: string; nome: str
               <button
                 type="button"
                 onClick={cancelEdit}
-                disabled={pending}
+                disabled={pending || iconBusy}
                 className={`${iconBtn} text-gray-600 hover:bg-gray-100`}
                 aria-label="Cancelar edição"
                 title="Cancelar"
@@ -124,6 +179,7 @@ export function CategoriaRow({ categoria }: { categoria: { id: string; nome: str
                 onClick={() => {
                   setError(null);
                   setNome(categoria.nome);
+                  setIconeDraft(categoria.icone);
                   setEditing(true);
                 }}
                 disabled={pending}

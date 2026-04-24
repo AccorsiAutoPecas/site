@@ -1,11 +1,17 @@
 "use server";
 
+import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { slugify } from "@/utils/slugify";
 import { createClient } from "@/services/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 export type CreateCategoriaState = { ok: false; message: string } | null;
+
+function parseIconeFromForm(formData: FormData): string | null {
+  const raw = String(formData.get("icone") ?? "").trim();
+  return raw === "" ? null : raw;
+}
 
 async function allocateCategoriaSlug(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -31,6 +37,7 @@ export async function createCategoria(
   _prev: CreateCategoriaState,
   formData: FormData
 ): Promise<CreateCategoriaState> {
+  await requireAdmin();
   const nome = String(formData.get("nome") ?? "").trim();
 
   if (!nome) {
@@ -39,8 +46,9 @@ export async function createCategoria(
 
   const supabase = await createClient();
   const slug = await allocateCategoriaSlug(supabase, nome);
+  const icone = parseIconeFromForm(formData);
 
-  const { error } = await supabase.from("categorias").insert({ nome, slug });
+  const { error } = await supabase.from("categorias").insert({ nome, slug, icone });
 
   if (error) {
     if (error.code === "23505") {
@@ -59,12 +67,14 @@ export async function createCategoria(
   revalidatePath("/admin/categorias");
   revalidatePath("/admin/produtos/novo");
   revalidatePath("/admin");
+  revalidatePath("/");
   redirect("/admin/categorias?cadastrado=1");
 }
 
 export type UpdateCategoriaResult = { ok: true } | { ok: false; message: string };
 
 export async function updateCategoria(formData: FormData): Promise<UpdateCategoriaResult> {
+  await requireAdmin();
   const id = String(formData.get("id") ?? "").trim();
   const nome = String(formData.get("nome") ?? "").trim();
 
@@ -77,8 +87,9 @@ export async function updateCategoria(formData: FormData): Promise<UpdateCategor
 
   const supabase = await createClient();
   const slug = await allocateCategoriaSlug(supabase, nome, id);
+  const icone = parseIconeFromForm(formData);
 
-  const { error } = await supabase.from("categorias").update({ nome, slug }).eq("id", id);
+  const { error } = await supabase.from("categorias").update({ nome, slug, icone }).eq("id", id);
 
   if (error) {
     if (error.code === "23505") {
@@ -94,12 +105,14 @@ export async function updateCategoria(formData: FormData): Promise<UpdateCategor
   revalidatePath("/admin/categorias");
   revalidatePath("/admin/produtos/novo");
   revalidatePath("/admin");
+  revalidatePath("/");
   return { ok: true };
 }
 
 export type DeleteCategoriaResult = { ok: true } | { ok: false; message: string };
 
 export async function deleteCategoria(categoriaId: string): Promise<DeleteCategoriaResult> {
+  await requireAdmin();
   const id = categoriaId.trim();
   if (!id) {
     return { ok: false, message: "Categoria inválida." };
@@ -115,5 +128,6 @@ export async function deleteCategoria(categoriaId: string): Promise<DeleteCatego
   revalidatePath("/admin/categorias");
   revalidatePath("/admin/produtos/novo");
   revalidatePath("/admin");
+  revalidatePath("/");
   return { ok: true };
 }

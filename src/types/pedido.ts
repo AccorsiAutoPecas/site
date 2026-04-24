@@ -1,0 +1,74 @@
+export type PedidoStatus =
+  | "rascunho"
+  | "aguardando_pagamento"
+  | "pago"
+  | "cancelado"
+  | "reembolsado"
+  | "falha_pagamento";
+
+/** Linha mínima para listagem em /pedidos */
+export type PedidoListRow = {
+  id: string;
+  status: PedidoStatus;
+  total: unknown;
+  created_at: string;
+  rastreio_codigo: string | null;
+  rastreio_url: string | null;
+};
+
+export type PedidoItemRow = {
+  id: string;
+  produto_id: string;
+  quantidade: number;
+  preco_unitario: unknown;
+  titulo_snapshot: string;
+  cod_produto_snapshot: string;
+};
+
+export type PedidoDetailWithItens = PedidoListRow & {
+  subtotal: unknown;
+  frete: unknown;
+  retirada_loja?: boolean;
+  destinatario_nome: string;
+  telefone: string;
+  cep: string;
+  logradouro: string;
+  numero: string;
+  complemento: string | null;
+  bairro: string;
+  cidade: string;
+  uf: string;
+  mercadopago_status: string | null;
+  mercadopago_payment_id: string | null;
+  rastreio_codigo: string | null;
+  rastreio_url: string | null;
+  pedido_itens: PedidoItemRow[];
+};
+
+export type PedidoLogisticaStatus = "nao_iniciado" | "em_separacao" | "postado" | "entregue";
+
+/** Linha para listagem no painel admin (service role). */
+export type AdminPedidoListRow = {
+  id: string;
+  user_id: string;
+  status: PedidoStatus;
+  total: unknown;
+  created_at: string;
+  destinatario_nome: string;
+  logistica_status: PedidoLogisticaStatus;
+  rastreio_codigo: string | null;
+};
+
+export type AdminPedidoDetailWithItens = PedidoDetailWithItens & {
+  user_id: string;
+  mercadopago_preference_id: string | null;
+  rastreio_codigo: string | null;
+  rastreio_url: string | null;
+  transportadora_nome: string | null;
+  melhor_envio_id: string | null;
+  melhor_envio_etiqueta_url: string | null;
+  frete_provedor: string | null;
+  logistica_status: PedidoLogisticaStatus;
+  /** E-mail em `auth.users`, quando disponível. */
+  cliente_email: string | null;
+};

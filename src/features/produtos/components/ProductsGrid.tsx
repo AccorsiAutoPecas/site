@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ProductSummary } from "@/types/product";
 import { ProductAddCartButton } from "@/features/produtos/components/ProductAddCartButton";
 
@@ -18,7 +19,7 @@ type ProductsGridProps = {
 function ProductImage({ src, alt }: { src: string | null; alt: string }) {
   if (!src) {
     return (
-      <div className="flex aspect-[4/3] w-full items-center justify-center text-xs text-store-navy-muted">
+      <div className="flex h-full w-full items-center justify-center text-xs text-store-navy-muted">
         Sem foto
       </div>
     );
@@ -52,23 +53,20 @@ export function ProductsGrid({ produtos, emptyMessage, variant = "home" }: Produ
     variant === "catalog"
       ? "catalog-products-grid grid w-full grid-cols-2 gap-0 sm:grid-cols-3 lg:grid-cols-4"
       : "home-products-grid grid w-full grid-cols-2 gap-0 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
-  const vlineClass =
-    variant === "catalog" ? "catalog-products-grid__vline" : "home-products-grid__vline";
-
   return (
     <div className="w-full">
       <ul className={gridClass}>
         {produtos.map((p) => (
           <li key={p.id} className="min-w-0">
             <article className="relative z-0 flex h-full flex-col gap-3 bg-white p-4 sm:p-5">
-              <div className="overflow-hidden rounded-sm bg-store-subtle">
-                <div className="aspect-[4/3] w-full p-2">
-                  <ProductImage src={p.imageUrl} alt={p.titulo} />
-                </div>
-              </div>
+              <Link href={`/produtos/${p.id}`} className="mx-auto block aspect-square w-full max-w-[500px]">
+                <ProductImage src={p.imageUrl} alt={p.titulo} />
+              </Link>
               <div className="flex min-h-0 flex-1 flex-col gap-1.5">
                 <h3 className="line-clamp-3 text-left text-sm font-bold leading-snug text-black sm:text-[0.9375rem]">
-                  {p.titulo}
+                  <Link href={`/produtos/${p.id}`} className="hover:underline">
+                    {p.titulo}
+                  </Link>
                 </h3>
                 <p className="text-left text-xs text-neutral-500">
                   Cod: <span className="font-medium">{p.cod_produto}</span>
@@ -81,17 +79,12 @@ export function ProductsGrid({ produtos, emptyMessage, variant = "home" }: Produ
                 </p>
               </div>
               <div className="mt-auto pt-1">
-                <ProductAddCartButton productTitle={p.titulo} />
+                <ProductAddCartButton product={p} />
               </div>
             </article>
-            <span className={vlineClass} aria-hidden />
           </li>
         ))}
       </ul>
-      <div
-        className="mx-auto mt-8 h-px w-[calc(100%-2rem)] bg-store-accent sm:mt-10 sm:w-[calc(100%-3rem)]"
-        aria-hidden
-      />
     </div>
   );
 }

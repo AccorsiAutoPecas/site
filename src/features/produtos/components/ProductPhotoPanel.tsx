@@ -6,6 +6,8 @@ import { parseProductImageStoragePath } from "@/services/storage/productImagePat
 
 const ACCENT = "#1d63ed";
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const REQUIRED_IMAGE_WIDTH = 1200;
+const REQUIRED_IMAGE_HEIGHT = 1200;
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const EXT_FROM_MIME: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -29,6 +31,91 @@ function resolvePublicImageUrl(fotoRef: string): string {
     .storage.from(productImagesBucket())
     .getPublicUrl(t.replace(/^\/+/, ""))
     .data.publicUrl;
+}
+
+function readImageDimensions(file: File): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const previewUrl = URL.createObjectURL(file);
+    const img = new Image();
+
+    img.onload = () => {
+      URL.revokeObjectURL(previewUrl);
+      resolve({
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      });
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(previewUrl);
+      reject(new Error("Não foi possível ler as dimensões da imagem."));
+    };
+
+    img.src = previewUrl;
+  });
+}
+
+function resizeImageToSquare(
+  file: File,
+  targetWidth: number,
+  targetHeight: number
+): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const previewUrl = URL.createObjectURL(file);
+    const img = new Image();
+
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          URL.revokeObjectURL(previewUrl);
+          reject(new Error("Não foi possível preparar a conversão da imagem."));
+          return;
+        }
+
+        const scale = Math.max(targetWidth / img.naturalWidth, targetHeight / img.naturalHeight);
+        const drawWidth = img.naturalWidth * scale;
+        const drawHeight = img.naturalHeight * scale;
+        const offsetX = (targetWidth - drawWidth) / 2;
+        const offsetY = (targetHeight - drawHeight) / 2;
+
+        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+
+        canvas.toBlob(
+          (blob) => {
+            URL.revokeObjectURL(previewUrl);
+            if (!blob) {
+              reject(new Error("Não foi possível converter a imagem para 1200x1200."));
+              return;
+            }
+
+            const baseName = file.name.replace(/\.[^.]+$/, "") || "produto";
+            const normalized = new File([blob], `${baseName}-1200x1200.webp`, {
+              type: "image/webp",
+              lastModified: Date.now(),
+            });
+            resolve(normalized);
+          },
+          "image/webp",
+          0.92
+        );
+      } catch {
+        URL.revokeObjectURL(previewUrl);
+        reject(new Error("Falha ao redimensionar a imagem."));
+      }
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(previewUrl);
+      reject(new Error("Não foi possível carregar a imagem para conversão."));
+    };
+
+    img.src = previewUrl;
+  });
 }
 
 type ProductPhotoPanelProps = {
@@ -106,21 +193,52 @@ export function ProductPhotoPanel({ initialFoto = "" }: ProductPhotoPanelProps) 
       setError("Arquivo muito grande (máximo 5 MB).");
       return;
     }
+    let width = 0;
+    let height = 0;
+    try {
+      const dims = await readImageDimensions(file);
+      width = dims.width;
+      height = dims.height;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Não foi possível validar a imagem.");
+      return;
+    }
+
+    let fileToUpload = file;
+    if (width !== REQUIRED_IMAGE_WIDTH || height !== REQUIRED_IMAGE_HEIGHT) {
+      if (file.type === "image/gif") {
+        setError(
+          `GIF fora do padrão não pode ser convertido automaticamente. Envie GIF em ${REQUIRED_IMAGE_WIDTH}x${REQUIRED_IMAGE_HEIGHT}px ou use PNG/JPEG/WEBP para ajuste automático.`
+        );
+        return;
+      }
+      try {
+        fileToUpload = await resizeImageToSquare(file, REQUIRED_IMAGE_WIDTH, REQUIRED_IMAGE_HEIGHT);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Não foi possível ajustar a imagem para 1200x1200.");
+        return;
+      }
+    }
+
+    if (fileToUpload.size > MAX_FILE_BYTES) {
+      setError("Imagem ajustada ficou maior que 5 MB. Tente uma imagem menor.");
+      return;
+    }
 
     const previousFoto = fotoUrl;
     revokePreview();
-    const blobUrl = URL.createObjectURL(file);
+    const blobUrl = URL.createObjectURL(fileToUpload);
     setPreviewSrc(blobUrl);
     setUploading(true);
 
     try {
       const supabase = createClient();
       const bucket = productImagesBucket();
-      const ext = EXT_FROM_MIME[file.type] ?? "jpg";
+      const ext = EXT_FROM_MIME[fileToUpload.type] ?? "jpg";
       const path = `produtos/${crypto.randomUUID()}.${ext}`;
 
-      const { error: upErr } = await supabase.storage.from(bucket).upload(path, file, {
-        contentType: file.type,
+      const { error: upErr } = await supabase.storage.from(bucket).upload(path, fileToUpload, {
+        contentType: fileToUpload.type,
         upsert: false,
       });
 
@@ -307,7 +425,7 @@ export function ProductPhotoPanel({ initialFoto = "" }: ProductPhotoPanelProps) 
                   alt=""
                   className="max-h-32 w-auto max-w-full rounded-md object-contain opacity-80"
                 />
-                <p className="text-sm text-gray-600">Enviando…</p>
+                <p className="text-sm text-gray-600">Ajustando para 1200x1200 e enviando…</p>
               </div>
             ) : previewSrc && !uploading && !hasListedImage ? (
               <div className="flex w-full max-w-sm flex-col items-center gap-3">
@@ -387,7 +505,7 @@ export function ProductPhotoPanel({ initialFoto = "" }: ProductPhotoPanelProps) 
               <path d="M21 15l-5-5-4 4-2-2-5 5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <p>
-              Tamanho mínimo recomendado: 1280px / Formatos recomendados: WEBP, PNG, JPEG ou GIF
+              Padrão: 1200x1200px (autoajuste para PNG/JPEG/WEBP) / GIF precisa já estar em 1200x1200
             </p>
           </div>
 

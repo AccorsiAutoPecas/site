@@ -1,33 +1,56 @@
 "use client";
 
+import Image from "next/image";
+
+import { CART_ICON_SRC } from "@/features/carrinho/constants";
+import { useCart } from "@/features/carrinho/CartContext";
+import type { ProductSummary } from "@/types/product";
+
 type ProductAddCartButtonProps = {
-  productTitle: string;
+  product: ProductSummary;
 };
 
-export function ProductAddCartButton({ productTitle }: ProductAddCartButtonProps) {
+export function ProductAddCartButton({ product }: ProductAddCartButtonProps) {
+  const { addProduct, lines } = useCart();
+  const stock = Math.max(0, Math.floor(Number(product.quantidade_estoque)));
+  const inCart = lines.find((l) => l.id === product.id)?.quantity ?? 0;
+  const outOfStock = stock <= 0;
+  const atCartLimit = !outOfStock && inCart >= stock;
+  const lastUnit = stock === 1 && !outOfStock;
+  const disabled = outOfStock || atCartLimit;
+
   return (
-    <button
-      type="button"
-      className="inline-flex w-full items-center justify-center gap-2 rounded-sm bg-store-accent px-3 py-2.5 text-sm font-bold text-black shadow-sm transition hover:brightness-95 active:brightness-90"
-      aria-label={`Adicionar ${productTitle} ao carrinho`}
-      onClick={() => {
-        /* Carrinho: integrar depois */
-      }}
-    >
-      <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden>
-        <path
-          d="M6 6h15l-1.5 9h-12L6 6zm0 0L5 3H2"
-          stroke="currentColor"
-          strokeWidth="1.75"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+    <div className="flex w-full flex-col gap-1.5">
+      {lastUnit ? (
+        <p className="text-center text-xs font-semibold text-amber-800" role="status">
+          Última peça disponível
+        </p>
+      ) : null}
+      <button
+        type="button"
+        disabled={disabled}
+        className="inline-flex w-full items-center justify-center gap-0 rounded-sm bg-store-accent px-3 py-2.5 text-sm font-bold text-black shadow-sm transition enabled:hover:brightness-95 enabled:active:brightness-90 disabled:cursor-not-allowed disabled:bg-store-line disabled:text-store-navy-muted sm:gap-2"
+        aria-label={
+          outOfStock
+            ? `${product.titulo} indisponível`
+            : atCartLimit
+              ? `Quantidade máxima de ${product.titulo} já está no carrinho`
+              : `Adicionar ${product.titulo} ao carrinho`
+        }
+        onClick={() => addProduct(product)}
+      >
+        <Image
+          src={CART_ICON_SRC}
+          alt=""
+          width={32}
+          height={32}
+          className="h-5 w-5 shrink-0 object-contain sm:h-4 sm:w-4"
+          unoptimized
         />
-        <path
-          d="M9 20a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z"
-          fill="currentColor"
-        />
-      </svg>
-      Adicionar ao carrinho
-    </button>
+        <span className="hidden sm:inline">
+          {outOfStock ? "Indisponível" : atCartLimit ? "Quantidade máxima no carrinho" : "Adicionar ao carrinho"}
+        </span>
+      </button>
+    </div>
   );
 }

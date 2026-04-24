@@ -1,0 +1,385 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+
+import type { VehicleFilterMarca, VehicleFilterModelo } from "@/features/compatibilidade/services/getVehicleFilterCatalogData";
+import { PLACA_CONSULTA_ANON_LIFETIME_MAX, PLACA_CONSULTA_USER_DAILY_MAX } from "@/lib/placaConsultaQuota";
+import { createClient } from "@/services/supabase/client";
+
+type PlateVehicleApiResponse = {
+  placa: string;
+  modelo: string | null;
+  marca: string | null;
+  ano: number | null;
+  fonte: string;
+  informacoesVeiculo?: {
+    marca: string | null;
+    modelo: string | null;
+    ano: number | null;
+  };
+};
+
+type PlateVehicleFinderProps = {
+  marcas: VehicleFilterMarca[];
+  modelos: VehicleFilterModelo[];
+  anosByModeloId: Record<string, number[]>;
+  onResolvedVehicle: (modeloId: string, ano: number | null) => void;
+};
+
+type PendingVehicleMatch = {
+  modeloId: string;
+  modeloNome: string;
+  ano: number | null;
+};
+
+type VehicleInfoModalData = {
+  marca: string | null;
+  modelo: string | null;
+  ano: number | null;
+};
+
+function normalizeText(raw: string | null | undefined): string {
+  return (raw ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+const BRAND_SYNONYMS: Record<string, string[]> = {
+  volkswagen: ["vw", "volks", "volks wagen"],
+  chevrolet: ["gm", "chevy"],
+  mercedes: ["mercedes benz", "mercedes-benz", "mb"],
+  mitsubishi: ["mit"],
+  landrover: ["land rover"],
+  citroen: ["citroën"],
+  peugeot: ["peugeot-citroen", "psa"],
+  bmw: ["b.m.w"],
+};
+
+function canonicalizeBrandName(raw: string | null | undefined): string {
+  const base = normalizeText(raw).replace(/\s+/g, "");
+  if (!base) return "";
+  for (const [canonical, aliases] of Object.entries(BRAND_SYNONYMS)) {
+    if (base === canonical) return canonical;
+    if (aliases.some((alias) => normalizeText(alias).replace(/\s+/g, "") === base)) return canonical;
+  }
+  return base;
+}
+
+function normalizePlateInput(raw: string): string {
+  return raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 7);
+}
+
+function isValidPlate(plate: string): boolean {
+  return /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(plate) || /^[A-Z]{3}[0-9]{4}$/.test(plate);
+}
+
+export function PlateVehicleFinder({ marcas, modelos, anosByModeloId, onResolvedVehicle }: PlateVehicleFinderProps) {
+  const router = useRouter();
+  const [placa, setPlaca] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [savingGarage, setSavingGarage] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [lastErrorCode, setLastErrorCode] = useState<string | null>(null);
+  const [sessionLoggedIn, setSessionLoggedIn] = useState<boolean | null>(null);
+  const [pendingMatch, setPendingMatch] = useState<PendingVehicleMatch | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [vehicleInfo, setVehicleInfo] = useState<VehicleInfoModalData | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    let cancelled = false;
+    void supabase.auth.getUser().then(({ data }) => {
+      if (!cancelled) setSessionLoggedIn(Boolean(data.user));
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSessionLoggedIn(Boolean(session?.user));
+    });
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  const marcaNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of marcas) map.set(m.id, m.nome);
+    return map;
+  }, [marcas]);
+
+  const applyFromApi = async () => {
+    const placaNormalizada = normalizePlateInput(placa);
+    if (!isValidPlate(placaNormalizada)) {
+      setPendingMatch(null);
+      setFeedback("Digite uma placa válida no formato ABC1234 ou ABC1D23.");
+      return;
+    }
+
+    setLoading(true);
+    setPendingMatch(null);
+    setFeedback(null);
+    setLastErrorCode(null);
+
+    try {
+      const res = await fetch(`/api/veiculos/placa?placa=${encodeURIComponent(placaNormalizada)}`, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        credentials: "include",
+      });
+      const payload = (await res.json()) as PlateVehicleApiResponse | { message?: string; code?: string };
+      if (!res.ok) {
+        setPendingMatch(null);
+        setModalOpen(false);
+        setVehicleInfo(null);
+        const errPayload = payload as { message?: string; code?: string };
+        setLastErrorCode(typeof errPayload.code === "string" ? errPayload.code : null);
+        setFeedback(
+          typeof errPayload.message === "string"
+            ? errPayload.message
+            : "Não foi possível consultar esta placa agora."
+        );
+        return;
+      }
+
+      const successPayload = payload as PlateVehicleApiResponse;
+      setVehicleInfo({
+        marca: successPayload.informacoesVeiculo?.marca ?? successPayload.marca ?? null,
+        modelo: successPayload.informacoesVeiculo?.modelo ?? successPayload.modelo ?? null,
+        ano: successPayload.informacoesVeiculo?.ano ?? successPayload.ano ?? null,
+      });
+      setModalOpen(true);
+
+      const modeloApi = normalizeText(successPayload.modelo);
+      const marcaApi = canonicalizeBrandName(successPayload.marca);
+      const anoApi = successPayload.ano ?? null;
+
+      const candidates = modelos
+        .map((modelo) => {
+          const nomeModelo = normalizeText(modelo.nome);
+          const nomeMarca = canonicalizeBrandName(marcaNameById.get(modelo.marca_id));
+          let score = 0;
+
+          if (modeloApi && nomeModelo === modeloApi) score += 10;
+          else if (modeloApi && (nomeModelo.includes(modeloApi) || modeloApi.includes(nomeModelo))) score += 7;
+
+          if (marcaApi && nomeMarca === marcaApi) score += 4;
+          else if (marcaApi && (nomeMarca.includes(marcaApi) || marcaApi.includes(nomeMarca))) score += 2;
+
+          if (anoApi != null && (anosByModeloId[modelo.id] ?? []).includes(anoApi)) score += 1;
+
+          return { modelo, score };
+        })
+        .filter((entry) => entry.score > 0)
+        .sort((a, b) => b.score - a.score);
+
+      const winner = candidates[0]?.modelo;
+      if (!winner) {
+        setPendingMatch(null);
+        setFeedback("Encontramos a placa, mas não achamos um modelo compatível no seu catálogo.");
+        return;
+      }
+
+      let anoAplicado: number | null = null;
+      if (anoApi != null) {
+        const anos = anosByModeloId[winner.id] ?? [];
+        if (anos.includes(anoApi)) anoAplicado = anoApi;
+      }
+
+      setPendingMatch({
+        modeloId: winner.id,
+        modeloNome: winner.nome,
+        ano: anoAplicado,
+      });
+      setFeedback(
+        `Veículo identificado: ${winner.nome}${anoAplicado ? ` (${anoAplicado})` : ""}. Deseja aplicar esse filtro?`
+      );
+    } catch {
+      setPendingMatch(null);
+      setModalOpen(false);
+      setVehicleInfo(null);
+      setFeedback("Falha de comunicação ao consultar a placa.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onApplyFilter = () => {
+    if (!pendingMatch) {
+      setModalOpen(false);
+      router.push("/produtos");
+      setFeedback("Veículo consultado. Você pode refinar os filtros no catálogo de produtos.");
+      return;
+    }
+    onResolvedVehicle(pendingMatch.modeloId, pendingMatch.ano);
+    setModalOpen(false);
+    setFeedback(
+      `Filtro aplicado: ${pendingMatch.modeloNome}${pendingMatch.ano ? ` (${pendingMatch.ano})` : ""}.`
+    );
+    setPendingMatch(null);
+  };
+
+  const onSaveGarage = async () => {
+    const placaNormalizada = normalizePlateInput(placa);
+    if (!isValidPlate(placaNormalizada)) {
+      setFeedback("Digite uma placa válida para salvar na garagem.");
+      return;
+    }
+    setSavingGarage(true);
+    try {
+      const response = await fetch("/api/garagem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          placa: placaNormalizada,
+          marca: vehicleInfo?.marca ?? null,
+          modelo: pendingMatch?.modeloNome ?? vehicleInfo?.modelo ?? null,
+          ano: pendingMatch?.ano ?? vehicleInfo?.ano ?? null,
+          modeloId: pendingMatch?.modeloId ?? null,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as { message?: string };
+      if (response.status === 401) {
+        router.push("/login?next=%2Fconta%3Faba%3Dgaragem");
+        return;
+      }
+      if (!response.ok) {
+        setFeedback(payload.message ?? "Não foi possível salvar esse veículo na sua garagem.");
+        return;
+      }
+      setFeedback("Veículo adicionado à sua garagem.");
+      setModalOpen(false);
+    } catch {
+      setFeedback("Falha de comunicação ao salvar na garagem.");
+    } finally {
+      setSavingGarage(false);
+    }
+  };
+
+  return (
+    <section className="mb-5 rounded-2xl bg-[#304375] p-4 text-white shadow-lg sm:p-5">
+      <div className="mx-auto flex w-full max-w-md flex-col items-center text-center">
+        <div className="w-full">
+          <p className="text-base font-extrabold leading-tight sm:text-lg">
+            Digite sua placa e encontre peças compatíveis
+          </p>
+          <p className="mt-2 max-w-sm text-[11px] leading-snug text-white/80">
+            {sessionLoggedIn
+              ? `Você pode fazer até ${PLACA_CONSULTA_USER_DAILY_MAX} consultas por placa por dia (horário de Brasília).`
+              : `Sem login: até ${PLACA_CONSULTA_ANON_LIFETIME_MAX} consulta neste dispositivo. Com conta: até ${PLACA_CONSULTA_USER_DAILY_MAX} por dia.`}
+          </p>
+          <div className="mt-3 flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
+            <input
+              type="text"
+              inputMode="text"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+              maxLength={8}
+              value={placa}
+              onChange={(e) => setPlaca(normalizePlateInput(e.target.value))}
+              placeholder="ABC1D23"
+              className="h-9 w-full max-w-[160px] rounded-lg border border-white/20 bg-white/90 px-2.5 text-xs font-medium tracking-[0.08em] text-store-navy outline-none ring-0 transition placeholder:text-store-navy/45 focus:border-store-accent/80 focus:bg-white"
+            />
+            <button
+              type="button"
+              disabled={loading}
+              onClick={applyFromApi}
+              className="h-9 rounded-lg bg-store-accent px-3 text-xs font-extrabold text-store-navy transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {loading ? "Consultando..." : "Buscar placa"}
+            </button>
+          </div>
+          {feedback ? (
+            <div className="mt-2 flex flex-col items-center gap-1">
+              <p className="text-xs text-white/90">{feedback}</p>
+              {lastErrorCode === "PLACA_QUOTA_ANON" ? (
+                <Link
+                  href="/login"
+                  className="text-xs font-bold text-store-accent underline decoration-store-accent/80 underline-offset-2 hover:brightness-110"
+                >
+                  Fazer login ou criar conta
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
+          {pendingMatch ? (
+            <div className="mt-3 rounded-xl border border-white/35 bg-white/10 px-3 py-2.5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-white/75">Veiculo identificado</p>
+              <p className="mt-1 text-sm font-extrabold text-white">
+                Modelo: {pendingMatch.modeloNome}
+                {pendingMatch.ano ? ` - Ano: ${pendingMatch.ano}` : " - Ano: nao informado"}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      </div>
+      {modalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-store-line bg-white p-4 text-store-navy shadow-2xl sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="text-base font-black sm:text-lg">Informações do veículo</h3>
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="rounded-lg border border-store-line px-2 py-1 text-xs font-bold text-store-navy"
+              >
+                Fechar
+              </button>
+            </div>
+            {vehicleInfo ? (
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <div className="rounded-lg border border-store-line/70 bg-store-subtle px-2.5 py-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-store-navy-muted">Marca</p>
+                  <p className="mt-0.5 text-sm font-semibold text-store-navy">{vehicleInfo.marca ?? "-"}</p>
+                </div>
+                <div className="rounded-lg border border-store-line/70 bg-store-subtle px-2.5 py-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-store-navy-muted">Modelo</p>
+                  <p className="mt-0.5 text-sm font-semibold text-store-navy">{vehicleInfo.modelo ?? "-"}</p>
+                </div>
+                <div className="rounded-lg border border-store-line/70 bg-store-subtle px-2.5 py-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-store-navy-muted">Ano</p>
+                  <p className="mt-0.5 text-sm font-semibold text-store-navy">{vehicleInfo.ano ?? "-"}</p>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-store-navy-muted">
+                A consulta retornou poucos detalhes, mas a placa foi processada com sucesso.
+              </p>
+            )}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={onApplyFilter}
+                className="h-10 rounded-lg bg-store-navy px-3 text-xs font-extrabold text-white transition hover:bg-store-navy/90"
+              >
+                Buscar produtos
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void onSaveGarage();
+                }}
+                disabled={savingGarage}
+                className="h-10 rounded-lg border border-store-navy px-3 text-xs font-bold text-store-navy transition hover:bg-store-subtle disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingGarage ? "Salvando..." : "Adicionar meu veículo à minha garagem"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="h-10 rounded-lg border border-store-line px-3 text-xs font-bold text-store-navy transition hover:bg-store-subtle"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}

@@ -1,0 +1,170 @@
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
+
+import { MAINTENANCE_MODE, isMaintenanceBypassPath } from "@/lib/siteMaintenance";
+
+const ADMIN_LOGIN = "/admin/login";
+
+function isProtectedAdminRoute(pathname: string): boolean {
+  if (!pathname.startsWith("/admin")) return false;
+  if (pathname === ADMIN_LOGIN || pathname.startsWith(`${ADMIN_LOGIN}/`)) return false;
+  return true;
+}
+
+function applyResponseCookies(from: NextResponse, to: NextResponse): NextResponse {
+  from.cookies.getAll().forEach(({ name, value }) => {
+    to.cookies.set(name, value);
+  });
+  return to;
+}
+
+function serviceUnavailableResponse(request: NextRequest): NextResponse {
+  const pathname = request.nextUrl.pathname;
+  const isApi =
+    pathname.startsWith("/api/admin") ||
+    pathname.startsWith("/api/integrations/melhor-envio");
+  if (isApi) {
+    return NextResponse.json(
+      { error: "Serviço de autenticação indisponível." },
+      { status: 503 },
+    );
+  }
+  return new NextResponse(
+    "Serviço temporariamente indisponível (configuração incompleta).",
+    {
+      status: 503,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    },
+  );
+}
+
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({ request });
+
+  const pathname = request.nextUrl.pathname;
+  const needsAdmin =
+    isProtectedAdminRoute(pathname) ||
+    pathname.startsWith("/api/admin") ||
+    pathname.startsWith("/api/integrations/melhor-envio");
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !key) {
+    if (needsAdmin) {
+      return serviceUnavailableResponse(request);
+    }
+    return response;
+  }
+
+  const supabase = createServerClient(url, key, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet, headers) {
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        response = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          response.cookies.set(name, value, options)
+        );
+        Object.entries(headers).forEach(([headerName, value]) =>
+          response.headers.set(headerName, value)
+        );
+      },
+    },
+  });
+
+  const { data: authData } = await supabase.auth.getUser();
+
+  const user = authData.user;
+
+  if (MAINTENANCE_MODE && !isMaintenanceBypassPath(pathname)) {
+    const isApi = pathname.startsWith("/api/");
+    if (!user) {
+      if (isApi) {
+        return NextResponse.json(
+          { error: "Loja em preparação." },
+          { status: 503 },
+        );
+      }
+      const dest = new URL("/em-construcao", request.url);
+      return applyResponseCookies(response, NextResponse.redirect(dest));
+    }
+
+    const { data: profileMaintenance } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileMaintenance?.role !== "admin") {
+      if (isApi) {
+        return NextResponse.json(
+          { error: "Loja em preparação." },
+          { status: 503 },
+        );
+      }
+      const dest = new URL("/em-construcao", request.url);
+      return applyResponseCookies(response, NextResponse.redirect(dest));
+    }
+  }
+
+  if (needsAdmin) {
+    if (!user) {
+      if (
+        pathname.startsWith("/api/integrations/melhor-envio") &&
+        request.method === "GET"
+      ) {
+        const loginUrl = request.nextUrl.clone();
+        loginUrl.pathname = "/login";
+        loginUrl.searchParams.set(
+          "next",
+          `${pathname}${request.nextUrl.search}`,
+        );
+        const redirect = NextResponse.redirect(loginUrl);
+        return applyResponseCookies(response, redirect);
+      }
+      if (
+        pathname.startsWith("/api/admin") ||
+        pathname.startsWith("/api/integrations/melhor-envio")
+      ) {
+        return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+      }
+      const loginUrl = request.nextUrl.clone();
+      loginUrl.pathname = "/login";
+      loginUrl.searchParams.set(
+        "next",
+        `${pathname}${request.nextUrl.search}`
+      );
+      const redirect = NextResponse.redirect(loginUrl);
+      return applyResponseCookies(response, redirect);
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profile?.role !== "admin") {
+      if (
+        pathname.startsWith("/api/admin") ||
+        pathname.startsWith("/api/integrations/melhor-envio")
+      ) {
+        return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+      }
+      const home = new URL("/", request.url);
+      const redirect = NextResponse.redirect(home);
+      return applyResponseCookies(response, redirect);
+    }
+  }
+
+  return response;
+}
+
+export const config = {
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
+};

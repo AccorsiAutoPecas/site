@@ -1,7 +1,12 @@
 import { createClient } from "@/services/supabase/server";
 import { fetchProductIdsMatchingSearchTerm } from "@/features/produtos/services/productSearchMatchingIds";
 import { resolveProductImagePublicUrl } from "@/features/produtos/utils/resolveProductImagePublicUrl";
+import { clampPercent } from "@/features/produtos/utils/paymentDiscount";
 import type { ProductSummary } from "@/types/product";
+
+function intersectIds(a: string[], bSet: Set<string>): string[] {
+  return a.filter((id) => bSet.has(id));
+}
 
 type ProdutoRow = {
   id: string;
@@ -9,6 +14,9 @@ type ProdutoRow = {
   cod_produto: string;
   valor: unknown;
   foto: string | null;
+  quantidade_estoque: unknown;
+  desconto_pix_percent?: unknown;
+  desconto_cartao_percent?: unknown;
 };
 
 function mapRows(rows: ProdutoRow[]): ProductSummary[] {
@@ -18,10 +26,20 @@ function mapRows(rows: ProdutoRow[]): ProductSummary[] {
     cod_produto: row.cod_produto,
     valor: Number(row.valor),
     imageUrl: resolveProductImagePublicUrl(row.foto),
+    quantidade_estoque: (() => {
+      const q = Number(row.quantidade_estoque);
+      return Number.isFinite(q) ? Math.max(0, Math.floor(q)) : 0;
+    })(),
+    desconto_pix_percent: clampPercent(row.desconto_pix_percent),
+    desconto_cartao_percent: clampPercent(row.desconto_cartao_percent),
   }));
 }
 
-export async function getHomeProducts(opts?: { q?: string | null }): Promise<{
+export async function getHomeProducts(opts?: {
+  q?: string | null;
+  modeloId?: string | null;
+  anoVeiculo?: number | null;
+}): Promise<{
   destaque: ProductSummary[];
   vitrine: ProductSummary[];
 }> {
@@ -35,21 +53,44 @@ export async function getHomeProducts(opts?: { q?: string | null }): Promise<{
       searchIds = ids;
     }
 
+    const modeloId = opts?.modeloId?.trim() || null;
+    let vehicleIds: string[] | null = null;
+    if (modeloId) {
+      let compQuery = supabase.from("produto_compatibilidades").select("produto_id").eq("modelo_id", modeloId);
+      const ano = opts?.anoVeiculo;
+      if (ano != null && Number.isFinite(ano)) {
+        compQuery = compQuery.lte("ano_inicio", ano).gte("ano_fim", ano);
+      }
+      const { data: compRows, error: compErr } = await compQuery;
+      if (compErr || !compRows?.length) return { destaque: [], vitrine: [] };
+      vehicleIds = [...new Set(compRows.map((r) => r.produto_id as string))];
+    }
+
+    let filterIds: string[] | null = null;
+    if (searchIds && vehicleIds) {
+      filterIds = intersectIds(searchIds, new Set(vehicleIds));
+      if (filterIds.length === 0) return { destaque: [], vitrine: [] };
+    } else if (searchIds) {
+      filterIds = searchIds;
+    } else if (vehicleIds) {
+      filterIds = vehicleIds;
+    }
+
     let destQuery = supabase
       .from("produtos")
-      .select("id, titulo, cod_produto, valor, foto")
+      .select("id, titulo, cod_produto, valor, foto, quantidade_estoque, desconto_pix_percent, desconto_cartao_percent")
       .eq("em_destaque", true)
       .order("titulo")
       .limit(15);
     let vitQuery = supabase
       .from("produtos")
-      .select("id, titulo, cod_produto, valor, foto")
+      .select("id, titulo, cod_produto, valor, foto, quantidade_estoque, desconto_pix_percent, desconto_cartao_percent")
       .eq("em_destaque", false)
       .order("titulo")
-      .limit(40);
-    if (searchIds) {
-      destQuery = destQuery.in("id", searchIds);
-      vitQuery = vitQuery.in("id", searchIds);
+      .limit(10);
+    if (filterIds) {
+      destQuery = destQuery.in("id", filterIds);
+      vitQuery = vitQuery.in("id", filterIds);
     }
 
     const [destRes, prodRes] = await Promise.all([destQuery, vitQuery]);

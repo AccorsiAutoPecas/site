@@ -1,8 +1,15 @@
 "use server";
 
+import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { assertCompatUsaAnosCadastrados } from "@/features/compatibilidade/utils/assertCompatModeloAnos";
 import { parseCompatibilidadesJson } from "@/features/compatibilidade/utils/compatibilidadesForm";
 import { fetchValidCategoriaIds, parseCategoriaIdsFromFormData } from "@/features/categorias/utils/productCategoriasForm";
+import { parseOptionalDimension } from "@/features/produtos/utils/parseOptionalDimension";
+import {
+  parseProductFormPercent,
+  parseRelacionadoIdsFromForm,
+} from "@/features/produtos/utils/productFormParsers";
+import { resolveEmbalagemId } from "@/features/produtos/utils/resolveEmbalagemId";
 import { createClient } from "@/services/supabase/server";
 import { removeProductImageFromStorage } from "@/services/storage/removeProductImage";
 import { revalidatePath } from "next/cache";
@@ -15,6 +22,7 @@ export async function updateProduct(
   _prev: UpdateProductState | null,
   formData: FormData
 ): Promise<UpdateProductState> {
+  await requireAdmin();
   const id = String(formData.get("id") ?? "").trim();
   const titulo = String(formData.get("titulo") ?? "").trim();
   const cod_produto = String(formData.get("cod_produto") ?? "").trim();
@@ -25,6 +33,22 @@ export async function updateProduct(
   const quantidadeRaw = String(formData.get("quantidade_estoque") ?? "").trim();
   const compatJson = String(formData.get("compat_json") ?? "");
   const categoriaIdsRequested = parseCategoriaIdsFromFormData(formData);
+  const embalagemRaw = String(formData.get("embalagem_id") ?? "");
+  const pc = parseOptionalDimension(String(formData.get("prod_comprimento_cm") ?? ""));
+  const pl = parseOptionalDimension(String(formData.get("prod_largura_cm") ?? ""));
+  const pa = parseOptionalDimension(String(formData.get("prod_altura_cm") ?? ""));
+  const pp = parseOptionalDimension(String(formData.get("prod_peso_kg") ?? ""));
+  const desconto_pix_percent = parseProductFormPercent(formData.get("desconto_pix_percent"));
+  const desconto_cartao_percent = parseProductFormPercent(formData.get("desconto_cartao_percent"));
+  if (pc === undefined || pl === undefined || pa === undefined || pp === undefined) {
+    return { ok: false, message: "Dimensões e peso do produto inválidos (use números ≥ 0 ou vazio)." };
+  }
+  if (pc === null || pl === null || pa === null || pp === null) {
+    return {
+      ok: false,
+      message: "Preencha comprimento, largura, altura e peso do produto para cálculo de frete por CEP.",
+    };
+  }
 
   if (!id) return { ok: false, message: "Produto não identificado." };
   if (!titulo) return { ok: false, message: "Informe o título." };
@@ -46,6 +70,8 @@ export async function updateProduct(
 
   const supabase = await createClient();
 
+  const embalagem_id = await resolveEmbalagemId(supabase, embalagemRaw);
+
   const anosOk = await assertCompatUsaAnosCadastrados(supabase, compatRows);
   if (!anosOk.ok) {
     return { ok: false, message: anosOk.message };
@@ -63,6 +89,13 @@ export async function updateProduct(
       foto,
       quantidade_estoque,
       em_destaque,
+      prod_comprimento_cm: pc,
+      prod_largura_cm: pl,
+      prod_altura_cm: pa,
+      prod_peso_kg: pp,
+      embalagem_id,
+      desconto_pix_percent,
+      desconto_cartao_percent,
     })
     .eq("id", id);
 
@@ -125,6 +158,26 @@ export async function updateProduct(
       return {
         ok: false,
         message: `Produto atualizado, mas categorias falharam: ${catError.message}`,
+      };
+    }
+  }
+
+  const relacionadoIds = parseRelacionadoIdsFromForm(formData, id);
+  const { error: delRelError } = await supabase.from("produto_relacionados").delete().eq("produto_id", id);
+  if (delRelError) {
+    return {
+      ok: false,
+      message: `Produto atualizado, mas ao atualizar relacionados: ${delRelError.message}`,
+    };
+  }
+  if (relacionadoIds.length > 0) {
+    const { error: relError } = await supabase.from("produto_relacionados").insert(
+      relacionadoIds.map((relacionado_id) => ({ produto_id: id, relacionado_id }))
+    );
+    if (relError) {
+      return {
+        ok: false,
+        message: `Produto atualizado, mas relacionados falharam: ${relError.message}`,
       };
     }
   }

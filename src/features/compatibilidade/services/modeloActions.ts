@@ -1,9 +1,11 @@
 "use server";
 
+import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { slugify } from "@/utils/slugify";
 import { createClient } from "@/services/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { parseTipoVeiculoModelo } from "@/features/compatibilidade/constants/tipoVeiculoModelo";
 
 export type CreateModeloState = { ok: false; message: string } | null;
 
@@ -34,14 +36,19 @@ export async function createModelo(
   _prev: CreateModeloState,
   formData: FormData
 ): Promise<CreateModeloState> {
+  await requireAdmin();
   const marcaId = String(formData.get("marca_id") ?? "").trim();
   const nome = String(formData.get("nome") ?? "").trim();
+  const tipoVeiculo = parseTipoVeiculoModelo(String(formData.get("tipo_veiculo") ?? ""));
 
   if (!marcaId) {
     return { ok: false, message: "Escolha a marca do veículo." };
   }
   if (!nome) {
     return { ok: false, message: "Informe o nome do modelo (ex.: Civic, Gol)." };
+  }
+  if (!tipoVeiculo) {
+    return { ok: false, message: "Escolha se o modelo é de carro, moto ou caminhão." };
   }
 
   const supabase = await createClient();
@@ -51,6 +58,7 @@ export async function createModelo(
     marca_id: marcaId,
     nome,
     slug,
+    tipo_veiculo: tipoVeiculo,
   });
 
   if (error) {
@@ -58,6 +66,13 @@ export async function createModelo(
       return {
         ok: false,
         message: "Já existe um modelo com esse nome para esta marca. Ajuste o nome ou escolha outra marca.",
+      };
+    }
+    if (error.message.includes("tipo_veiculo") || error.message.includes("modelos_tipo_veiculo")) {
+      return {
+        ok: false,
+        message:
+          "Coluna tipo_veiculo ausente ou inválida no banco. Execute a migration supabase/migrations/20260413210000_modelos_tipo_veiculo.sql no Supabase e tente de novo.",
       };
     }
     return {
@@ -80,6 +95,7 @@ export async function addModeloAno(
   _prev: ModeloAnoState,
   formData: FormData
 ): Promise<ModeloAnoState> {
+  await requireAdmin();
   const modeloId = String(formData.get("modelo_id") ?? "").trim();
   const anoRaw = String(formData.get("ano") ?? "").trim();
 
@@ -119,6 +135,7 @@ export async function addModeloAno(
 }
 
 export async function removeModeloAno(formData: FormData): Promise<void> {
+  await requireAdmin();
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return;
 
@@ -126,4 +143,37 @@ export async function removeModeloAno(formData: FormData): Promise<void> {
   await supabase.from("modelo_anos").delete().eq("id", id);
   revalidatePath("/admin/marcas-e-modelos");
   revalidatePath("/admin/modelos");
+}
+
+export type DeleteModeloResult = { ok: true } | { ok: false; message: string };
+
+export async function deleteModelo(modeloId: string): Promise<DeleteModeloResult> {
+  await requireAdmin();
+  const id = modeloId.trim();
+  if (!id) {
+    return { ok: false, message: "Modelo inválido." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("modelos").delete().eq("id", id);
+
+  if (error) {
+    if (error.code === "23503") {
+      return {
+        ok: false,
+        message:
+          "Não é possível excluir: ainda há dados vinculados a este modelo que impedem a remoção. Verifique o banco ou entre em contato com o suporte.",
+      };
+    }
+    return { ok: false, message: `Não foi possível excluir: ${error.message}.` };
+  }
+
+  revalidatePath("/admin/marcas-e-modelos");
+  revalidatePath("/admin/marcas");
+  revalidatePath("/admin/modelos");
+  revalidatePath("/admin/produtos");
+  revalidatePath("/admin/produtos/novo");
+  revalidatePath("/produtos");
+  revalidatePath("/admin");
+  return { ok: true };
 }

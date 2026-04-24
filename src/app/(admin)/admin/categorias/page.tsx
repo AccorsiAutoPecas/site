@@ -10,6 +10,7 @@ export const metadata = {
 type CategoriaListRow = {
   id: string;
   nome: string;
+  icone: string | null;
 };
 
 export default async function CategoriasPage({
@@ -26,7 +27,7 @@ export default async function CategoriasPage({
 
   try {
     const supabase = await createClient();
-    const { data, error } = await supabase.from("categorias").select("id, nome").order("nome");
+    const { data, error } = await supabase.from("categorias").select("id, nome, icone").order("nome");
 
     if (error) {
       listError = error.message;
@@ -125,6 +126,7 @@ export default async function CategoriasPage({
                   <table className="w-full min-w-[320px] text-left text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 bg-gray-50/80 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        <th className="w-14 px-4 py-3 font-semibold normal-case tracking-normal">Ícone</th>
                         <th className="px-6 py-3">Nome</th>
                         <th className="w-[1%] px-4 py-3 text-right font-semibold normal-case tracking-normal">
                           <span className="sr-only">Ações</span>

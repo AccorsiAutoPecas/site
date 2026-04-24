@@ -1,11 +1,13 @@
 "use server";
 
+import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { createClient } from "@/services/supabase/server";
 import { removeProductImageFromStorage } from "@/services/storage/removeProductImage";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 export async function deleteProduct(productId: string): Promise<{ ok: false; message: string } | void> {
+  await requireAdmin();
   const id = productId.trim();
   if (!id) {
     return { ok: false, message: "Produto inválido." };
