@@ -48,7 +48,7 @@ export async function createModelo(
     return { ok: false, message: "Informe o nome do modelo (ex.: Civic, Gol)." };
   }
   if (!tipoVeiculo) {
-    return { ok: false, message: "Escolha se o modelo é de carro, moto ou caminhão." };
+    return { ok: false, message: "Escolha se o modelo é de carro ou caminhão." };
   }
 
   const supabase = await createClient();

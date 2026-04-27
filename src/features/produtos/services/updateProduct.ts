@@ -10,6 +10,10 @@ import {
   parseRelacionadoIdsFromForm,
 } from "@/features/produtos/utils/productFormParsers";
 import { resolveEmbalagemId } from "@/features/produtos/utils/resolveEmbalagemId";
+import {
+  isHtmlDescriptionEmpty,
+  sanitizeProductDescriptionHtml,
+} from "@/features/produtos/utils/sanitizeProductDescription";
 import { createClient } from "@/services/supabase/server";
 import { removeProductImageFromStorage } from "@/services/storage/removeProductImage";
 import { revalidatePath } from "next/cache";
@@ -26,7 +30,10 @@ export async function updateProduct(
   const id = String(formData.get("id") ?? "").trim();
   const titulo = String(formData.get("titulo") ?? "").trim();
   const cod_produto = String(formData.get("cod_produto") ?? "").trim();
-  const descricao = String(formData.get("descricao") ?? "").trim();
+  const descricaoRaw = String(formData.get("descricao") ?? "").trim();
+  const descricaoSan = sanitizeProductDescriptionHtml(descricaoRaw);
+  const descricao =
+    descricaoSan && !isHtmlDescriptionEmpty(descricaoSan) ? descricaoSan : null;
   const valorRaw = String(formData.get("valor") ?? "").replace(",", ".");
   const foto = String(formData.get("foto") ?? "").trim() || null;
   const em_destaque = formData.get("em_destaque") === "on";
@@ -84,7 +91,7 @@ export async function updateProduct(
     .update({
       titulo,
       cod_produto,
-      descricao: descricao || null,
+      descricao,
       valor,
       foto,
       quantidade_estoque,
@@ -187,5 +194,6 @@ export async function updateProduct(
   revalidatePath("/admin");
   revalidatePath(`/admin/produtos/${id}/edit`);
   revalidatePath("/admin/produtos/novo");
+  revalidatePath(`/produtos/${id}`);
   return { ok: true, message: "Produto atualizado com sucesso." };
 }

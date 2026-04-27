@@ -276,6 +276,8 @@ export async function criarPedidoECheckout(
     items: preferenceItems,
     external_reference: pedidoId,
     metadata: { pedido_id: pedidoId },
+    /** Limite de parcelas no checkout (alinha com texto na página do produto). */
+    payment_methods: { installments: 3 },
     back_urls: {
       success: `${baseUrl}/checkout/retorno?status=success`,
       failure: `${baseUrl}/checkout/retorno?status=failure`,

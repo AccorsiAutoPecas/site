@@ -68,9 +68,6 @@ export function ProductsGrid({ produtos, emptyMessage, variant = "home" }: Produ
                     {p.titulo}
                   </Link>
                 </h3>
-                <p className="text-left text-xs text-neutral-500">
-                  Cod: <span className="font-medium">{p.cod_produto}</span>
-                </p>
                 <p className="text-left text-lg font-bold leading-tight text-black sm:text-xl">
                   {money.format(Number(p.valor))}
                 </p>

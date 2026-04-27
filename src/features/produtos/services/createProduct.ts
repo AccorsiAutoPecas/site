@@ -10,6 +10,10 @@ import {
   parseRelacionadoIdsFromForm,
 } from "@/features/produtos/utils/productFormParsers";
 import { resolveEmbalagemId } from "@/features/produtos/utils/resolveEmbalagemId";
+import {
+  isHtmlDescriptionEmpty,
+  sanitizeProductDescriptionHtml,
+} from "@/features/produtos/utils/sanitizeProductDescription";
 import { createClient } from "@/services/supabase/server";
 import { revalidatePath } from "next/cache";
 
@@ -24,7 +28,10 @@ export async function createProduct(
   await requireAdmin();
   const titulo = String(formData.get("titulo") ?? "").trim();
   const cod_produto = String(formData.get("cod_produto") ?? "").trim();
-  const descricao = String(formData.get("descricao") ?? "").trim();
+  const descricaoRaw = String(formData.get("descricao") ?? "").trim();
+  const descricaoSan = sanitizeProductDescriptionHtml(descricaoRaw);
+  const descricao =
+    descricaoSan && !isHtmlDescriptionEmpty(descricaoSan) ? descricaoSan : null;
   const valorRaw = String(formData.get("valor") ?? "").replace(",", ".");
   const foto = String(formData.get("foto") ?? "").trim() || null;
   const em_destaque = formData.get("em_destaque") === "on";
@@ -87,7 +94,7 @@ export async function createProduct(
     .insert({
       titulo,
       cod_produto,
-      descricao: descricao || null,
+      descricao,
       valor,
       foto,
       quantidade_estoque,
@@ -165,6 +172,7 @@ export async function createProduct(
   revalidatePath("/admin");
   revalidatePath("/admin/produtos");
   revalidatePath("/admin/produtos/novo");
+  revalidatePath(`/produtos/${produto.id}`);
   return {
     ok: true,
     message: "Sucesso ao cadastrar produto!",

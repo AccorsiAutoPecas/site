@@ -128,9 +128,6 @@ export function CartPage({ initialProfileCep = "" }: CartPageProps) {
 
                       <div className="min-w-0 flex-1">
                         <h3 className="text-base font-bold leading-snug text-black">{line.titulo}</h3>
-                        <p className="mt-1 text-xs text-store-navy-muted">
-                          Cod: <span className="font-medium">{line.cod_produto}</span>
-                        </p>
 
                         {lastUnit ? (
                           <p

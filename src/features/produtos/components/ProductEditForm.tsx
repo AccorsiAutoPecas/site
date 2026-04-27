@@ -22,6 +22,7 @@ import {
   ProductRelacionadosFieldset,
   type ProdutoRelacionadoOption,
 } from "@/features/produtos/components/ProductRelacionadosFieldset";
+import { ProductDescriptionEditor } from "@/features/produtos/components/ProductDescriptionEditor";
 import { updateProduct, type UpdateProductState } from "@/features/produtos/services/updateProduct";
 
 export type { ModeloOption, CategoriaOption };
@@ -166,13 +167,7 @@ export function ProductEditForm({
                   <label htmlFor="descricao" className="text-sm font-medium text-gray-700">
                     Descrição
                   </label>
-                  <textarea
-                    id="descricao"
-                    name="descricao"
-                    rows={4}
-                    defaultValue={product.descricao}
-                    className={fieldClass}
-                  />
+                  <ProductDescriptionEditor key={`desc-${product.id}`} initialHtml={product.descricao} />
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">

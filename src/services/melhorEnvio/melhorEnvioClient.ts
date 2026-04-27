@@ -157,7 +157,38 @@ function mapRowToOption(row: CalculateRow): MelhorEnvioQuoteOption | null {
   };
 }
 
-function parseCalculateBody(json: unknown): MelhorEnvioQuoteOption[] {
+/**
+ * Lista de trechos (minúsculos) que devem aparecer em `company.name` ou no nome do serviço.
+ * Ex.: `jadlog,correios` — vazio ou ausente = todas as opções retornadas pelo Melhor Envio.
+ */
+function readMelhorEnvioCompanyAllowlistFromEnv(): string[] | null {
+  const raw = process.env.MELHOR_ENVIO_SOMENTE_EMPRESAS?.trim();
+  if (!raw) {
+    return null;
+  }
+  const parts = raw
+    .split(/[,;]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return parts.length > 0 ? parts : null;
+}
+
+function rowMatchesCompanyAllowlist(row: CalculateRow, allowlist: string[]): boolean {
+  const company =
+    typeof row.company?.name === "string" ? row.company.name.trim().toLowerCase() : "";
+  const serviceName =
+    typeof row.name === "string" ? row.name.trim().toLowerCase() : "";
+  const haystack = `${company} ${serviceName}`.trim();
+  if (!haystack) {
+    return false;
+  }
+  return allowlist.some((token) => haystack.includes(token));
+}
+
+function parseCalculateBody(
+  json: unknown,
+  companyAllowlist: string[] | null,
+): MelhorEnvioQuoteOption[] {
   if (!Array.isArray(json)) {
     return [];
   }
@@ -166,7 +197,11 @@ function parseCalculateBody(json: unknown): MelhorEnvioQuoteOption[] {
     if (!item || typeof item !== "object") {
       continue;
     }
-    const opt = mapRowToOption(item as CalculateRow);
+    const row = item as CalculateRow;
+    if (companyAllowlist && !rowMatchesCompanyAllowlist(row, companyAllowlist)) {
+      continue;
+    }
+    const opt = mapRowToOption(row);
     if (opt) {
       out.push(opt);
     }
@@ -401,8 +436,15 @@ export async function quoteShipment(
     );
   }
 
-  const opcoes = parseCalculateBody(json);
+  const companyAllowlist = readMelhorEnvioCompanyAllowlistFromEnv();
+  const opcoes = parseCalculateBody(json, companyAllowlist);
   if (opcoes.length === 0) {
+    if (companyAllowlist?.length) {
+      return quoteFail(
+        "invalid_response",
+        "Nenhuma opção de frete entre as transportadoras permitidas (MELHOR_ENVIO_SOMENTE_EMPRESAS) para este CEP.",
+      );
+    }
     return quoteFail(
       "invalid_response",
       "Nenhuma opção de frete retornada pelo Melhor Envio.",

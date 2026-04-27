@@ -231,7 +231,7 @@ export function ProductCompatibilidadeFieldset({
                   id="compat-picker-busca"
                   type="search"
                   autoComplete="off"
-                  placeholder="Ex.: Civic, Fiat, moto…"
+                  placeholder="Ex.: Civic, Gol, Sprinter…"
                   value={pickerQuery}
                   onChange={(e) => setPickerQuery(e.target.value)}
                   className={fieldClass + " w-full"}

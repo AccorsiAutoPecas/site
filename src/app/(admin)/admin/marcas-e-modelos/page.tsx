@@ -243,7 +243,7 @@ export default async function MarcasEModelosPage({
             <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
               <h3 className="text-base font-semibold text-gray-900">Novo modelo</h3>
               <p className="mt-1 text-sm text-gray-500">
-                Escolha a marca, o tipo (carro, moto ou caminhão) e informe o nome do modelo.
+                Escolha a marca, o tipo (carro ou caminhão) e informe o nome do modelo.
               </p>
               <div className="mt-6">
                 {marcasForSelect.length === 0 && !marcasError ? (

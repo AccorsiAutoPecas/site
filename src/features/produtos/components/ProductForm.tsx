@@ -22,6 +22,7 @@ import {
   ProductRelacionadosFieldset,
   type ProdutoRelacionadoOption,
 } from "@/features/produtos/components/ProductRelacionadosFieldset";
+import { ProductDescriptionEditor } from "@/features/produtos/components/ProductDescriptionEditor";
 import { createProduct, type CreateProductState } from "@/features/produtos/services/createProduct";
 
 export type { ModeloOption };
@@ -161,13 +162,7 @@ export function ProductForm({
                 <label htmlFor="descricao" className="text-sm font-medium text-gray-700">
                   Descrição
                 </label>
-                <textarea
-                  id="descricao"
-                  name="descricao"
-                  rows={4}
-                  className={fieldClass}
-                  placeholder="Detalhes do produto"
-                />
+                <ProductDescriptionEditor />
               </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">

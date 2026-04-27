@@ -5,6 +5,7 @@ import { storeShellContent, storeShellInset } from "@/config/storeShell";
 import { ProductMercadoPagoInstallments } from "@/features/produtos/components/ProductMercadoPagoInstallments";
 import { ProductDetailAddToCart } from "@/features/produtos/components/ProductDetailAddToCart";
 import { ProductsGrid } from "@/features/produtos/components/ProductsGrid";
+import { ProductDescriptionDisplay } from "@/features/produtos/components/ProductDescriptionDisplay";
 import { getProductDetailPageData } from "@/features/produtos/services/getProductDetailPageData";
 import { unitPriceAfterPaymentDiscount } from "@/features/produtos/utils/paymentDiscount";
 
@@ -15,21 +16,23 @@ const money = new Intl.NumberFormat("pt-BR", {
   currency: "BRL",
 });
 
+/** Quadrado da foto: no `lg` o tamanho fica limitado pela altura da linha (até a quantidade na coluna ao lado). */
 function ProductPhoto({ src, alt }: { src: string | null; alt: string }) {
+  const shell =
+    "flex aspect-square w-full max-w-[min(100%,22rem)] items-center justify-center rounded-lg border border-store-line/80 bg-white p-3 shadow-sm sm:max-w-[26rem] " +
+    "lg:max-h-full lg:max-w-full lg:min-h-0 lg:min-w-0 lg:shadow-none";
   if (!src) {
     return (
-      <div className="mx-auto flex aspect-square w-full max-w-[220px] items-center justify-center bg-transparent text-sm text-store-navy-muted sm:max-w-[260px]">
+      <div className={`text-center text-sm text-store-navy-muted ${shell}`}>
         Sem foto
       </div>
     );
   }
   return (
-    // eslint-disable-next-line @next/next/no-img-element -- URL pode vir de storage externo sem remotePatterns fixos
-    <img
-      src={src}
-      alt={alt}
-      className="mx-auto aspect-square w-full max-w-[220px] object-contain sm:max-w-[260px]"
-    />
+    <div className={shell}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- URL pode vir de storage externo sem remotePatterns fixos */}
+      <img src={src} alt={alt} className="max-h-full max-w-full object-contain object-center" />
+    </div>
   );
 }
 
@@ -66,25 +69,46 @@ export default async function ProdutoDetalhePage({ params }: PageProps) {
     <div className="flex min-h-dvh flex-col bg-store-cream font-sans text-store-navy">
       <main className={`flex-1 py-8 sm:py-10 ${storeShellInset}`}>
         <div className={`${storeShellContent} space-y-10`}>
-          <section className="grid grid-cols-1 gap-6 border-b border-store-line pb-8 lg:grid-cols-12 lg:gap-8">
-            <div className="flex justify-center lg:col-span-5">
-              <ProductPhoto src={produto.imageUrl} alt={produto.titulo} />
+          <section className="grid grid-cols-1 gap-6 border-b border-store-line pb-8 lg:grid-cols-12 lg:items-stretch lg:gap-8">
+            {/* Ordem no mobile: foto → descrição → compra → compat. No desktop: foto e compra na linha 1; descrição e compat na linha 2. */}
+            <div className="flex w-full justify-center lg:col-span-5 lg:row-start-1 lg:h-full lg:min-h-0 lg:flex-col lg:items-stretch">
+              <div className="flex min-h-[12rem] w-full min-w-0 flex-1 items-center justify-center lg:min-h-0">
+                <ProductPhoto src={produto.imageUrl} alt={produto.titulo} />
+              </div>
             </div>
 
-            <div className="space-y-4 lg:col-span-7">
-              <p className="text-sm text-store-navy-muted">{produto.cod_produto}</p>
+            <div className="space-y-2 border-t border-store-line pt-4 lg:col-span-5 lg:row-start-2 lg:border-t-0 lg:pt-0">
+              <h2 className="text-sm font-semibold text-store-navy">Descrição</h2>
+              <ProductDescriptionDisplay descricao={produto.descricao} />
+            </div>
+
+            <div className="space-y-4 lg:col-span-7 lg:col-start-6 lg:row-start-1">
               <h1 className="text-2xl font-bold leading-tight text-black sm:text-3xl">{produto.titulo}</h1>
 
               <div className="space-y-2">
                 <p className="text-3xl font-bold text-[#1d63ed] sm:text-4xl">{money.format(precoCartao)}</p>
-                {pixDestaque ? (
-                  <p className="text-base font-semibold text-emerald-800">
-                    PIX: {money.format(precoPix)} ({produto.desconto_pix_percent}% off)
-                  </p>
-                ) : null}
                 <p className={`text-sm font-semibold ${outOfStock ? "text-red-700" : "text-emerald-700"}`}>
                   {stockText}
                 </p>
+              </div>
+
+              <div className="space-y-1 rounded-xl bg-store-subtle/90 p-4 shadow-md sm:p-5">
+                <h2 className="text-2xl font-bold uppercase tracking-wide text-store-accent sm:text-3xl">
+                  PIX
+                </h2>
+                {pixDestaque ? (
+                  <p className="text-base text-store-navy sm:text-lg">
+                    <span className="font-bold text-black">{money.format(precoPix)}</span>
+                    <span className="text-store-navy-muted"> · </span>
+                    <span className="font-semibold text-store-accent">
+                      desconto de {produto.desconto_pix_percent}% no PIX
+                    </span>
+                  </p>
+                ) : (
+                  <p className="text-base font-medium text-store-accent sm:text-lg">
+                    Pague com PIX no checkout.
+                  </p>
+                )}
               </div>
 
               <ProductMercadoPagoInstallments amountBrl={precoCartao} />
@@ -102,31 +126,24 @@ export default async function ProdutoDetalhePage({ params }: PageProps) {
               </div>
 
               <ProductDetailAddToCart product={produto} />
+            </div>
 
-              <div className="space-y-2 border-t border-store-line pt-3">
-                <h2 className="text-sm font-semibold text-store-navy">Descrição</h2>
-                <div className="text-sm leading-relaxed text-store-navy">
-                  {produto.descricao || "Sem descrição cadastrada para este produto."}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <h2 className="text-sm font-semibold text-store-navy">Compatibilidade</h2>
-                {produto.compatibilidades.length > 0 ? (
-                  <ul className="flex flex-wrap gap-2">
-                    {produto.compatibilidades.map((item) => (
-                      <li
-                        key={item}
-                        className="rounded-full border border-store-line bg-store-accent/80 px-3 py-1 text-xs font-semibold text-black"
-                      >
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-store-navy-muted">Compatibilidade ainda não informada.</p>
-                )}
-              </div>
+            <div className="space-y-2 border-t border-store-line pt-4 lg:col-span-7 lg:col-start-6 lg:row-start-2">
+              <h2 className="text-sm font-semibold text-store-navy">Compatibilidade</h2>
+              {produto.compatibilidades.length > 0 ? (
+                <ul className="flex flex-wrap gap-2">
+                  {produto.compatibilidades.map((item) => (
+                    <li
+                      key={item}
+                      className="rounded-full border border-store-line bg-store-accent/80 px-3 py-1 text-xs font-semibold text-black"
+                    >
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-store-navy-muted">Compatibilidade ainda não informada.</p>
+              )}
             </div>
           </section>
 

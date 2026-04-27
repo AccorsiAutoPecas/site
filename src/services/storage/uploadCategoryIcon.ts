@@ -1,14 +1,9 @@
+import { removeCategoryIconBackground } from "@/features/categorias/utils/removeCategoryIconBackground";
 import { createClient } from "@/services/supabase/client";
 import { parseProductImageStoragePath } from "@/services/storage/productImagePath";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
-const EXT_FROM_MIME: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-  "image/gif": "gif",
-};
 
 function productImagesBucket() {
   return process.env.NEXT_PUBLIC_SUPABASE_PRODUCT_IMAGES_BUCKET ?? "product-images";
@@ -39,13 +34,26 @@ export async function uploadCategoryIconFile(
     throw new Error("Arquivo muito grande (máximo 5 MB).");
   }
 
+  let pngBody: Blob;
+  try {
+    pngBody = await removeCategoryIconBackground(file);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `Não foi possível remover o fundo do ícone (${msg}). Tente outra imagem ou formato (JPEG, PNG ou WEBP).`
+    );
+  }
+
+  if (pngBody.size > MAX_FILE_BYTES) {
+    throw new Error("Imagem após remover o fundo ainda excede 5 MB. Use uma foto menor.");
+  }
+
   const supabase = createClient();
   const bucket = productImagesBucket();
-  const ext = EXT_FROM_MIME[file.type] ?? "jpg";
-  const path = `categorias/${crypto.randomUUID()}.${ext}`;
+  const path = `categorias/${crypto.randomUUID()}.png`;
 
-  const { error: upErr } = await supabase.storage.from(bucket).upload(path, file, {
-    contentType: file.type,
+  const { error: upErr } = await supabase.storage.from(bucket).upload(path, pngBody, {
+    contentType: "image/png",
     upsert: false,
   });
 

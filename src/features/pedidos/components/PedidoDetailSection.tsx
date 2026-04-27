@@ -51,9 +51,6 @@ export function PedidoDetailSection({ pedido }: { pedido: PedidoDetailWithItens 
                 <th scope="col" className="px-3 py-2.5">
                   Produto
                 </th>
-                <th scope="col" className="px-3 py-2.5">
-                  Código
-                </th>
                 <th scope="col" className="px-3 py-2.5 text-right">
                   Qtd.
                 </th>
@@ -72,9 +69,6 @@ export function PedidoDetailSection({ pedido }: { pedido: PedidoDetailWithItens 
                 return (
                   <tr key={item.id}>
                     <td className="px-3 py-3 text-store-navy">{item.titulo_snapshot}</td>
-                    <td className="px-3 py-3 font-mono text-xs text-store-navy-muted">
-                      {item.cod_produto_snapshot}
-                    </td>
                     <td className="px-3 py-3 text-right tabular-nums text-store-navy">{item.quantidade}</td>
                     <td className="px-3 py-3 text-right tabular-nums text-store-navy-muted">
                       {formatPedidoMoney(item.preco_unitario)}

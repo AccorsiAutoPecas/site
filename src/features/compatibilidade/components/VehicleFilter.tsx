@@ -14,28 +14,24 @@ import { storeShellContent, storeShellInset } from "@/config/storeShell";
 import { StoreProductSearchBar } from "@/components/store/StoreProductSearchBar";
 import { PlateVehicleFinder } from "@/features/compatibilidade/components/PlateVehicleFinder";
 
-type VehicleCategory = "motos" | "carros" | "caminhoes";
+type VehicleCategory = "carros" | "caminhoes";
 
 const TABS: { id: VehicleCategory; label: string }[] = [
-  { id: "motos", label: "Motos" },
   { id: "carros", label: "Carros" },
   { id: "caminhoes", label: "Caminhões" },
 ];
 
 const TAB_TO_TIPO: Record<VehicleCategory, TipoVeiculoModelo> = {
-  motos: "moto",
   carros: "carro",
   caminhoes: "caminhao",
 };
 
 function tipoToTab(t: TipoVeiculoModelo): VehicleCategory {
-  if (t === "moto") return "motos";
   if (t === "caminhao") return "caminhoes";
   return "carros";
 }
 
 const TAB_ICON_SRC: Record<VehicleCategory, string> = {
-  motos: "/home/filtro/moto.png",
   carros: "/home/filtro/carro.png",
   caminhoes: "/home/filtro/caminhao.png",
 };
@@ -44,7 +40,6 @@ const TAB_ICON_PX = 40;
 
 /** Título do filtro no modal mobile (singular / claro). */
 const FILTER_KIND_LABEL: Record<VehicleCategory, string> = {
-  motos: "moto",
   carros: "carro",
   caminhoes: "caminhão",
 };
@@ -254,7 +249,7 @@ export function VehicleFilter({
   const [marcaId, setMarcaId] = useState("");
   const [modeloId, setModeloId] = useState("");
   const [ano, setAno] = useState("");
-  /** Mobile: painel de marca/modelo/ano só após toque em moto/carro/caminhão. */
+  /** Mobile: painel de marca/modelo/ano só após toque em carro/caminhão. */
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
   const replaceVehicleQuery = (mutate: (p: URLSearchParams) => void) => {
@@ -413,7 +408,7 @@ export function VehicleFilter({
         <div className="relative flex">
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 left-0 z-0 w-1/3 rounded-full bg-store-navy shadow-sm transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+            className="pointer-events-none absolute inset-y-0 left-0 z-0 w-1/2 rounded-full bg-store-navy shadow-sm transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
             style={{ transform: `translateX(calc(${activeTabIndex} * 100%))` }}
           />
           {TABS.map(({ id, label }) => {

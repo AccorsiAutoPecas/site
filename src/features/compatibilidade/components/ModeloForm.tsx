@@ -79,7 +79,7 @@ export function ModeloForm({ marcas }: { marcas: MarcaOption[] }) {
               </option>
             ))}
           </select>
-          <p className="text-xs text-gray-500">Define se este modelo é de carro, moto ou caminhão.</p>
+          <p className="text-xs text-gray-500">Define se este modelo é de carro ou caminhão.</p>
         </div>
 
         <button

@@ -96,7 +96,9 @@ export function CategoriaIconeField({
               disabled={disabled || uploading}
               onChange={onFileChange}
             />
-            {uploading ? "Enviando…" : "Escolher imagem (JPEG, PNG, WEBP ou GIF, máx. 5 MB)"}
+            {uploading
+              ? "Removendo fundo e enviando…"
+              : "Escolher imagem (JPEG, PNG, WEBP ou GIF, máx. 5 MB). O fundo é removido automaticamente; o ícone fica em PNG como os demais."}
           </label>
           {url && (
             <button
