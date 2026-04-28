@@ -395,7 +395,7 @@ export function VehicleFilter({
     <>
       <h2
         id={`${baseId}-heading`}
-        className="vehicle-filter-heading text-center text-lg font-black text-store-navy sm:text-xl"
+        className="vehicle-filter-heading text-center text-lg font-semibold text-store-navy sm:text-xl"
       >
         Filtre a sua busca
       </h2>

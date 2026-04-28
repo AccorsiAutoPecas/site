@@ -3,8 +3,8 @@ import { createClient } from "@/services/supabase/server";
 import { MarcaForm } from "@/features/marcas/components/MarcaForm";
 import { MarcaRow } from "@/features/marcas/components/MarcaRow";
 import { ModeloForm, type MarcaOption } from "@/features/compatibilidade/components/ModeloForm";
-import { ModeloTableRow } from "@/features/compatibilidade/components/ModeloTableRow";
 import { ModelosListagemFiltros } from "@/features/compatibilidade/components/ModelosListagemFiltros";
+import { ModelosListagemTabela } from "@/features/compatibilidade/components/ModelosListagemTabela";
 
 export const metadata = {
   title: "Marcas e modelos | Admin",
@@ -309,34 +309,17 @@ export default async function MarcasEModelosPage({
               )}
 
               {!modelosError && modelosFiltrados.length > 0 && (
-                <div className="max-h-[min(55vh,22rem)] overflow-auto">
-                  <table className="w-full min-w-[480px] text-left text-xs">
-                    <thead className="sticky top-0 z-[1]">
-                      <tr className="border-b border-gray-100 bg-gray-50/95 text-[10px] font-semibold uppercase tracking-wide text-gray-500 backdrop-blur-sm">
-                        <th className="px-4 py-2">Marca</th>
-                        <th className="px-4 py-2">Modelo</th>
-                        <th className="whitespace-nowrap px-4 py-2">Tipo</th>
-                        <th className="min-w-[12rem] px-4 py-2">Anos de referência</th>
-                        <th className="w-[1%] px-3 py-2 text-right font-semibold normal-case tracking-normal">
-                          <span className="sr-only">Ações</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {modelosFiltrados.map((m) => (
-                        <ModeloTableRow
-                          key={m.id}
-                          modeloId={m.id}
-                          nome={m.nome}
-                          tipoVeiculo={m.tipo_veiculo}
-                          marcaNome={marcaNomeFromRow(m.marcas)}
-                          anos={anosByModelo.get(m.id) ?? []}
-                          modeloAnosError={Boolean(modeloAnosError)}
-                        />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <ModelosListagemTabela
+                  key={`${marcaSelectValue}\0${modeloSearchTerm}`}
+                  items={modelosFiltrados.map((m) => ({
+                    modeloId: m.id,
+                    nome: m.nome,
+                    tipoVeiculo: m.tipo_veiculo,
+                    marcaNome: marcaNomeFromRow(m.marcas),
+                    anos: anosByModelo.get(m.id) ?? [],
+                    modeloAnosError: Boolean(modeloAnosError),
+                  }))}
+                />
               )}
             </div>
           )}

@@ -18,6 +18,7 @@ export function ModeloTableRow({
   marcaNome,
   anos,
   modeloAnosError,
+  bulkCheckbox,
 }: {
   modeloId: string;
   nome: string;
@@ -25,6 +26,7 @@ export function ModeloTableRow({
   marcaNome: string;
   anos: { id: string; ano: number }[];
   modeloAnosError: boolean;
+  bulkCheckbox?: { checked: boolean; onChange: (checked: boolean) => void };
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -50,6 +52,17 @@ export function ModeloTableRow({
 
   return (
     <tr className="align-top text-gray-900 transition hover:bg-gray-50/80">
+      {bulkCheckbox && (
+        <td className="w-[1%] px-3 py-2 align-middle">
+          <input
+            type="checkbox"
+            checked={bulkCheckbox.checked}
+            onChange={(e) => bulkCheckbox.onChange(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-gray-300 text-admin-accent focus:ring-admin-accent"
+            aria-label={`Selecionar modelo ${nome}`}
+          />
+        </td>
+      )}
       <td className="px-4 py-2">{marcaNome}</td>
       <td className="px-4 py-2 font-medium">
         {nome}

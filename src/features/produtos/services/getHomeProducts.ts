@@ -82,21 +82,30 @@ export async function getHomeProducts(opts?: {
       .eq("em_destaque", true)
       .order("titulo")
       .limit(15);
+    if (filterIds) destQuery = destQuery.in("id", filterIds);
+
+    const destRes = await destQuery;
+    const destaque = !destRes.error && destRes.data ? mapRows(destRes.data as ProdutoRow[]) : [];
+    const destIds = destaque.map((p) => p.id);
+
     let vitQuery = supabase
       .from("produtos")
       .select("id, titulo, cod_produto, valor, foto, quantidade_estoque, desconto_pix_percent, desconto_cartao_percent")
-      .eq("em_destaque", false)
       .order("titulo")
       .limit(10);
-    if (filterIds) {
-      destQuery = destQuery.in("id", filterIds);
-      vitQuery = vitQuery.in("id", filterIds);
+    if (filterIds) vitQuery = vitQuery.in("id", filterIds);
+    if (destIds.length > 0) {
+      vitQuery = vitQuery.not(
+        "id",
+        "in",
+        `(${destIds.map((id) => `"${id}"`).join(",")})`,
+      );
     }
 
-    const [destRes, prodRes] = await Promise.all([destQuery, vitQuery]);
+    const prodRes = await vitQuery;
 
     return {
-      destaque: !destRes.error && destRes.data ? mapRows(destRes.data as ProdutoRow[]) : [],
+      destaque,
       vitrine: !prodRes.error && prodRes.data ? mapRows(prodRes.data as ProdutoRow[]) : [],
     };
   } catch {

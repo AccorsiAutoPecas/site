@@ -51,11 +51,7 @@ body {
 /* Só o título do filtro de veículos — Codec Pro */
 .vehicle-filter-heading {
   font-family: "Codec Pro", ui-sans-serif, system-ui, sans-serif;
-  font-weight: 900;
-  /* Reforço fino: o webfont do CDN traz só 400; isso deixa o traço mais “cheio” sem borrar */
-  text-shadow:
-    0.5px 0 0 currentColor,
-    -0.5px 0 0 currentColor;
+  font-weight: 600;
 }
 
 /* Leveza e feedback tátil em botões nativos */

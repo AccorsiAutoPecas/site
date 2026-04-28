@@ -211,15 +211,8 @@ export async function POST(request: Request) {
     return Response.json({ error: parsedItems.error }, { status: 400 });
   }
 
+  /** Leitura de produtos/embalagens com a sessão da requisição (anon ou logado); RLS já restringe o catálogo. */
   const supabase = await createClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return Response.json({ error: "Faça login para calcular o frete." }, { status: 401 });
-  }
 
   const ids = [...parsedItems.keys()];
   const { data: prodRows, error: prodErr } = await supabase

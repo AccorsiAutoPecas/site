@@ -177,3 +177,46 @@ export async function deleteModelo(modeloId: string): Promise<DeleteModeloResult
   revalidatePath("/admin");
   return { ok: true };
 }
+
+export type DeleteModelosEmLoteResult = {
+  removidos: number;
+  falhas: { id: string; message: string }[];
+};
+
+/** Exclui vários modelos em sequência; falhas por FK ou outro motivo são retornadas sem interromper os demais. */
+export async function deleteModelosEmLote(ids: string[]): Promise<DeleteModelosEmLoteResult> {
+  await requireAdmin();
+  const unique = [...new Set(ids.map((x) => x.trim()).filter(Boolean))];
+  const falhas: { id: string; message: string }[] = [];
+  let removidos = 0;
+
+  if (unique.length === 0) {
+    return { removidos: 0, falhas: [] };
+  }
+
+  const supabase = await createClient();
+  for (const id of unique) {
+    const { error } = await supabase.from("modelos").delete().eq("id", id);
+    if (error) {
+      const message =
+        error.code === "23503"
+          ? "Ainda há dados vinculados a este modelo que impedem a remoção."
+          : `Não foi possível excluir: ${error.message}`;
+      falhas.push({ id, message });
+    } else {
+      removidos += 1;
+    }
+  }
+
+  if (removidos > 0) {
+    revalidatePath("/admin/marcas-e-modelos");
+    revalidatePath("/admin/marcas");
+    revalidatePath("/admin/modelos");
+    revalidatePath("/admin/produtos");
+    revalidatePath("/admin/produtos/novo");
+    revalidatePath("/produtos");
+    revalidatePath("/admin");
+  }
+
+  return { removidos, falhas };
+}

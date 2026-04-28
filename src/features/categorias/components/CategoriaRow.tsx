@@ -106,7 +106,7 @@ export function CategoriaRow({
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
-                  handleSave();
+                  if (!pending && !iconBusy) handleSave();
                 }
                 if (e.key === "Escape") cancelEdit();
               }}

@@ -6,6 +6,7 @@ import { ProductMercadoPagoInstallments } from "@/features/produtos/components/P
 import { ProductDetailAddToCart } from "@/features/produtos/components/ProductDetailAddToCart";
 import { ProductsGrid } from "@/features/produtos/components/ProductsGrid";
 import { ProductDescriptionDisplay } from "@/features/produtos/components/ProductDescriptionDisplay";
+import { ProductFreteCepConsult } from "@/features/produtos/components/ProductFreteCepConsult";
 import { getProductDetailPageData } from "@/features/produtos/services/getProductDetailPageData";
 import { unitPriceAfterPaymentDiscount } from "@/features/produtos/utils/paymentDiscount";
 
@@ -70,65 +71,14 @@ export default async function ProdutoDetalhePage({ params }: PageProps) {
       <main className={`flex-1 py-8 sm:py-10 ${storeShellInset}`}>
         <div className={`${storeShellContent} space-y-10`}>
           <section className="grid grid-cols-1 gap-6 border-b border-store-line pb-8 lg:grid-cols-12 lg:items-stretch lg:gap-8">
-            {/* Ordem no mobile: foto → descrição → compra → compat. No desktop: foto e compra na linha 1; descrição e compat na linha 2. */}
-            <div className="flex w-full justify-center lg:col-span-5 lg:row-start-1 lg:h-full lg:min-h-0 lg:flex-col lg:items-stretch">
-              <div className="flex min-h-[12rem] w-full min-w-0 flex-1 items-center justify-center lg:min-h-0">
+            {/* Mobile: foto → compat → compra (incl. descrição logo após o carrinho). Desktop: esq. foto+compat; dir. coluna única com descrição colada ao botão. */}
+            <div className="flex w-full justify-center lg:col-span-5 lg:row-start-1 lg:h-full lg:min-h-0 lg:flex-col lg:items-stretch lg:justify-start">
+              <div className="flex min-h-[12rem] w-full min-w-0 flex-1 items-center justify-center lg:min-h-0 lg:flex-1 lg:items-start lg:justify-start">
                 <ProductPhoto src={produto.imageUrl} alt={produto.titulo} />
               </div>
             </div>
 
-            <div className="space-y-2 border-t border-store-line pt-4 lg:col-span-5 lg:row-start-2 lg:border-t-0 lg:pt-0">
-              <h2 className="text-sm font-semibold text-store-navy">Descrição</h2>
-              <ProductDescriptionDisplay descricao={produto.descricao} />
-            </div>
-
-            <div className="space-y-4 lg:col-span-7 lg:col-start-6 lg:row-start-1">
-              <h1 className="text-2xl font-bold leading-tight text-black sm:text-3xl">{produto.titulo}</h1>
-
-              <div className="space-y-2">
-                <p className="text-3xl font-bold text-[#1d63ed] sm:text-4xl">{money.format(precoCartao)}</p>
-                <p className={`text-sm font-semibold ${outOfStock ? "text-red-700" : "text-emerald-700"}`}>
-                  {stockText}
-                </p>
-              </div>
-
-              <div className="space-y-1 rounded-xl bg-store-subtle/90 p-4 shadow-md sm:p-5">
-                <h2 className="text-2xl font-bold uppercase tracking-wide text-store-accent sm:text-3xl">
-                  PIX
-                </h2>
-                {pixDestaque ? (
-                  <p className="text-base text-store-navy sm:text-lg">
-                    <span className="font-bold text-black">{money.format(precoPix)}</span>
-                    <span className="text-store-navy-muted"> · </span>
-                    <span className="font-semibold text-store-accent">
-                      desconto de {produto.desconto_pix_percent}% no PIX
-                    </span>
-                  </p>
-                ) : (
-                  <p className="text-base font-medium text-store-accent sm:text-lg">
-                    Pague com PIX no checkout.
-                  </p>
-                )}
-              </div>
-
-              <ProductMercadoPagoInstallments amountBrl={precoCartao} />
-
-              <div className="space-y-1 pt-1">
-                <label htmlFor="cep" className="block text-xs font-semibold text-store-navy">
-                  Consultar CEP
-                </label>
-                <input
-                  id="cep"
-                  name="cep"
-                  placeholder="Digite seu CEP aqui"
-                  className="w-full rounded-full bg-store-subtle/60 px-4 py-2.5 text-sm text-store-navy outline-none ring-0 transition placeholder:text-store-navy-muted focus:bg-white focus:ring-2 focus:ring-store-accent"
-                />
-              </div>
-
-              <ProductDetailAddToCart product={produto} />
-            </div>
-
-            <div className="space-y-2 border-t border-store-line pt-4 lg:col-span-7 lg:col-start-6 lg:row-start-2">
+            <div className="space-y-2 border-t border-store-line pt-4 lg:col-span-5 lg:row-start-2 lg:border-t lg:border-store-line lg:pt-6">
               <h2 className="text-sm font-semibold text-store-navy">Compatibilidade</h2>
               {produto.compatibilidades.length > 0 ? (
                 <ul className="flex flex-wrap gap-2">
@@ -145,6 +95,58 @@ export default async function ProdutoDetalhePage({ params }: PageProps) {
                 <p className="text-sm text-store-navy-muted">Compatibilidade ainda não informada.</p>
               )}
             </div>
+
+            <div className="space-y-4 border-t border-store-line pt-4 lg:col-span-7 lg:col-start-6 lg:row-span-2 lg:row-start-1 lg:border-t-0 lg:pt-0">
+              <h1 className="text-2xl font-bold leading-tight text-black sm:text-3xl">{produto.titulo}</h1>
+
+              <div className="space-y-2">
+                <div className="flex flex-row flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <p className="shrink-0 text-3xl font-bold leading-none text-[#1d63ed] sm:text-4xl">
+                    {money.format(precoCartao)}
+                  </p>
+                  {pixDestaque ? (
+                    <p
+                      className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 border-l border-store-line/60 pl-2.5 text-[0.8125rem] text-store-navy sm:text-sm"
+                      aria-label={`PIX ${money.format(precoPix)}, desconto de ${produto.desconto_pix_percent}%`}
+                    >
+                      <span className="text-base font-bold uppercase tracking-[0.12em] text-store-accent sm:text-lg">
+                        PIX
+                      </span>
+                      <span className="font-semibold tabular-nums text-black">{money.format(precoPix)}</span>
+                      <span className="text-store-navy-muted" aria-hidden>
+                        ·
+                      </span>
+                      <span className="font-medium text-store-accent">−{produto.desconto_pix_percent}%</span>
+                    </p>
+                  ) : (
+                    <p className="border-l border-store-line/60 pl-2.5 text-xs text-store-navy-muted">
+                      <span className="text-base font-bold uppercase tracking-[0.12em] text-store-accent sm:text-lg">
+                        PIX
+                      </span>
+                      <span className="mx-1 text-store-line" aria-hidden>
+                        ·
+                      </span>
+                      no checkout
+                    </p>
+                  )}
+                </div>
+                <p className={`text-sm font-semibold ${outOfStock ? "text-red-700" : "text-emerald-700"}`}>
+                  {stockText}
+                </p>
+              </div>
+
+              <ProductMercadoPagoInstallments amountBrl={precoCartao} />
+
+              <ProductFreteCepConsult productId={produto.id} />
+
+              <div className="space-y-3">
+                <ProductDetailAddToCart product={produto} />
+                <div className="space-y-2 border-t border-store-line pt-3">
+                  <h2 className="text-sm font-semibold text-store-navy">Descrição</h2>
+                  <ProductDescriptionDisplay descricao={produto.descricao} />
+                </div>
+              </div>
+            </div>
           </section>
 
           <section aria-labelledby="produtos-relacionados-heading" className="space-y-5">
@@ -159,6 +161,7 @@ export default async function ProdutoDetalhePage({ params }: PageProps) {
             </header>
             <ProductsGrid
               variant="catalog"
+              pixStyle="home"
               produtos={relacionados}
               emptyMessage="Ainda não encontramos produtos relacionados para este item."
             />

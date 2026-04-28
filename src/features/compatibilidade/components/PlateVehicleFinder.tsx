@@ -272,7 +272,7 @@ export function PlateVehicleFinder({ marcas, modelos, anosByModeloId, onResolved
               ? `Você pode fazer até ${PLACA_CONSULTA_USER_DAILY_MAX} consultas por placa por dia (horário de Brasília).`
               : `Sem login: até ${PLACA_CONSULTA_ANON_LIFETIME_MAX} consulta neste dispositivo. Com conta: até ${PLACA_CONSULTA_USER_DAILY_MAX} por dia.`}
           </p>
-          <div className="mt-3 flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
+          <div className="mt-3 flex flex-col items-center gap-1.5 sm:flex-row sm:justify-center sm:gap-2">
             <input
               type="text"
               inputMode="text"
@@ -283,13 +283,13 @@ export function PlateVehicleFinder({ marcas, modelos, anosByModeloId, onResolved
               value={placa}
               onChange={(e) => setPlaca(normalizePlateInput(e.target.value))}
               placeholder="ABC1D23"
-              className="h-9 w-full max-w-[160px] rounded-lg border border-white/20 bg-white/90 px-2.5 text-xs font-medium tracking-[0.08em] text-store-navy outline-none ring-0 transition placeholder:text-store-navy/45 focus:border-store-accent/80 focus:bg-white"
+              className="h-8 w-full max-w-[7.5rem] rounded-md border border-white/20 bg-white/90 px-2 text-[11px] font-semibold tracking-[0.06em] text-store-navy outline-none ring-0 transition placeholder:text-store-navy/45 focus:border-store-accent/80 focus:bg-white sm:max-w-[8rem]"
             />
             <button
               type="button"
               disabled={loading}
               onClick={applyFromApi}
-              className="h-9 rounded-lg bg-store-accent px-3 text-xs font-extrabold text-store-navy transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
+              className="h-8 rounded-md bg-store-accent px-2.5 text-[11px] font-extrabold text-store-navy transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {loading ? "Consultando..." : "Buscar placa"}
             </button>
