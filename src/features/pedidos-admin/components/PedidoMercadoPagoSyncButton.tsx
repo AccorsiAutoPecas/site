@@ -21,13 +21,9 @@ export function PedidoMercadoPagoSyncButton({ pedidoId }: { pedidoId: string }) 
       <form action={formAction} className="flex flex-wrap items-center gap-2">
         <input type="hidden" name="pedido_id" value={pedidoId} />
         <button type="submit" disabled={pending} className={btnClass}>
-          {pending ? "Consultando MP…" : "Sincronizar pagamento (Mercado Pago)"}
+          {pending ? "Verificando pagamento..." : "Verificar pagamento (Mais rapido)"}
         </button>
       </form>
-      <p className="text-xs text-gray-600">
-        Reconsulta o pagamento na API do Mercado Pago (ID salvo no pedido ou busca por referência do pedido) e
-        atualiza o status como no webhook.
-      </p>
       {state?.error ? (
         <p className="rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-900" role="alert">
           {state.error}

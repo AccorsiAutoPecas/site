@@ -32,7 +32,7 @@ export function PedidoMelhorEnvioFluxoAutomatico({
       <p className="mt-1 text-xs text-gray-600">
         Cota de novo com os dados do pedido, cria o envio no carrinho da API, compra com seu saldo Melhor
         Carteira e gera a etiqueta — sem abrir o site do Melhor Envio. Exige{" "}
-        <strong className="font-medium">CPF ou CNPJ do destinatário</strong> salvo abaixo, variáveis{" "}
+        <strong className="font-medium">CPF ou CNPJ do destinatário</strong> salvo no checkout, variáveis{" "}
         <code className="rounded bg-white/80 px-0.5">MELHOR_ENVIO_FROM_*</code> no servidor e OAuth com
         permissões de carrinho e checkout (reautorize o app após atualizar escopos).
       </p>

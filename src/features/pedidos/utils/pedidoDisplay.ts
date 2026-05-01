@@ -37,3 +37,10 @@ export function formatCep(cep: string): string {
   if (digits.length === 8) return `${digits.slice(0, 5)}-${digits.slice(5)}`;
   return cep.trim() || "—";
 }
+
+/** Formata código curto de pedido para UI admin (001, 002, ...). */
+export function formatPedidoUiCode(seq: number | null | undefined): string {
+  const n = Number(seq);
+  if (!Number.isInteger(n) || n <= 0) return "—";
+  return String(n).padStart(3, "0");
+}

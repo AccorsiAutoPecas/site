@@ -133,8 +133,8 @@ export function CheckoutPage({
     }
 
     const docDigits = destinatarioDocumento.replace(/\D/g, "");
-    if (modoEntrega === "envio" && docDigits && docDigits.length !== 11 && docDigits.length !== 14) {
-      setFormError("CPF do destinatário deve ter 11 dígitos ou CNPJ 14 (somente números), ou deixe em branco.");
+    if (modoEntrega === "envio" && docDigits.length !== 11 && docDigits.length !== 14) {
+      setFormError("Informe CPF (11 dígitos) ou CNPJ (14 dígitos) do destinatário para entrega.");
       return;
     }
 
@@ -431,8 +431,7 @@ export function CheckoutPage({
                           htmlFor={`${baseId}-doc`}
                           className="text-sm font-medium text-store-navy"
                         >
-                          CPF ou CNPJ do destinatário{" "}
-                          <span className="font-normal text-store-navy-muted">(opcional)</span>
+                          CPF ou CNPJ do destinatário
                         </label>
                         <input
                           id={`${baseId}-doc`}
@@ -442,7 +441,8 @@ export function CheckoutPage({
                           value={destinatarioDocumento}
                           onChange={(e) => setDestinatarioDocumento(e.target.value)}
                           className={inputClass}
-                          placeholder="Para envio com Melhor Envio (declaração de conteúdo)"
+                          placeholder="Obrigatório para entrega (somente números)"
+                          required
                         />
                       </div>
                     </>

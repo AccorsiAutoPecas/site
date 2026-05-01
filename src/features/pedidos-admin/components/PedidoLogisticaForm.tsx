@@ -18,13 +18,6 @@ const LOGISTICA_OPTIONS: { value: PedidoLogisticaStatus; label: string }[] = [
   { value: "entregue", label: "Entregue" },
 ];
 
-const FRETE_PROV_OPTIONS: { value: string; label: string }[] = [
-  { value: "", label: "Não definido" },
-  { value: "fixo", label: "Fixo" },
-  { value: "melhor_envio", label: "Melhor Envio" },
-  { value: "manual", label: "Manual" },
-];
-
 const inputClass =
   "mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none focus:border-[#1d63ed] focus:ring-2 focus:ring-[#1d63ed]/20";
 
@@ -40,6 +33,13 @@ export function PedidoLogisticaForm({ pedido }: { pedido: AdminPedidoDetailWithI
 
       <form action={formAction} className="space-y-5">
         <input type="hidden" name="pedido_id" value={pedido.id} />
+        <input type="hidden" name="transportadora_nome" value={pedido.transportadora_nome ?? ""} />
+        <input type="hidden" name="frete_provedor" value={pedido.frete_provedor ?? ""} />
+        <input type="hidden" name="destinatario_documento" value={pedido.destinatario_documento ?? ""} />
+        <input type="hidden" name="rastreio_codigo" value={pedido.rastreio_codigo ?? ""} />
+        <input type="hidden" name="rastreio_url" value={pedido.rastreio_url ?? ""} />
+        <input type="hidden" name="melhor_envio_id" value={pedido.melhor_envio_id ?? ""} />
+        <input type="hidden" name="melhor_envio_etiqueta_url" value={pedido.melhor_envio_etiqueta_url ?? ""} />
 
         <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2 rounded-lg border border-amber-100 bg-amber-50/80 px-4 py-3">
@@ -79,112 +79,6 @@ export function PedidoLogisticaForm({ pedido }: { pedido: AdminPedidoDetailWithI
           </select>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700" htmlFor="transportadora_nome">
-            Transportadora
-          </label>
-          <input
-            id="transportadora_nome"
-            name="transportadora_nome"
-            type="text"
-            className={inputClass}
-            defaultValue={pedido.transportadora_nome ?? ""}
-            placeholder="Ex.: Correios, Jadlog"
-            autoComplete="off"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700" htmlFor="frete_provedor">
-            Origem do frete
-          </label>
-          <select
-            id="frete_provedor"
-            name="frete_provedor"
-            className={inputClass}
-            defaultValue={pedido.frete_provedor ?? ""}
-          >
-            {FRETE_PROV_OPTIONS.map((o) => (
-              <option key={o.value || "empty"} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="sm:col-span-2">
-          <label className="block text-sm font-medium text-gray-700" htmlFor="destinatario_documento">
-            CPF / CNPJ do destinatário (Melhor Envio)
-          </label>
-          <input
-            id="destinatario_documento"
-            name="destinatario_documento"
-            type="text"
-            className={inputClass}
-            defaultValue={pedido.destinatario_documento ?? ""}
-            placeholder="Somente dígitos — obrigatório para fluxo automático de etiqueta"
-            autoComplete="off"
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            Usado na declaração de conteúdo. O cliente pode informar no checkout se você ativar o campo lá.
-          </p>
-        </div>
-
-        <div className="sm:col-span-2">
-          <label className="block text-sm font-medium text-gray-700" htmlFor="rastreio_codigo">
-            Código de rastreio
-          </label>
-          <input
-            id="rastreio_codigo"
-            name="rastreio_codigo"
-            type="text"
-            className={inputClass}
-            defaultValue={pedido.rastreio_codigo ?? ""}
-            autoComplete="off"
-          />
-        </div>
-
-        <div className="sm:col-span-2">
-          <label className="block text-sm font-medium text-gray-700" htmlFor="rastreio_url">
-            URL de rastreio (opcional)
-          </label>
-          <input
-            id="rastreio_url"
-            name="rastreio_url"
-            type="url"
-            className={inputClass}
-            defaultValue={pedido.rastreio_url ?? ""}
-            placeholder="https://"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700" htmlFor="melhor_envio_id">
-            ID Melhor Envio
-          </label>
-          <input
-            id="melhor_envio_id"
-            name="melhor_envio_id"
-            type="text"
-            className={inputClass}
-            defaultValue={pedido.melhor_envio_id ?? ""}
-            autoComplete="off"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700" htmlFor="melhor_envio_etiqueta_url">
-            URL da etiqueta
-          </label>
-          <input
-            id="melhor_envio_etiqueta_url"
-            name="melhor_envio_etiqueta_url"
-            type="url"
-            className={inputClass}
-            defaultValue={pedido.melhor_envio_etiqueta_url ?? ""}
-            placeholder="https://"
-          />
-        </div>
       </div>
 
       {state?.error && (
@@ -211,9 +105,8 @@ export function PedidoLogisticaForm({ pedido }: { pedido: AdminPedidoDetailWithI
       <div className="rounded-lg border border-gray-200 bg-gray-50/70 p-4">
         <h3 className="text-sm font-semibold text-gray-900">Ações Melhor Envio</h3>
         <p className="mt-1 text-xs text-gray-600">
-          O checkout não cria envio no Melhor Envio: use o ID do carrinho/envio criado no painel Melhor Envio (ou API)
-          e cole no campo &quot;ID Melhor Envio&quot;. As ações abaixo usam esse valor ao enviar o formulário e gravam
-          no pedido se ainda não estiver salvo. A impressão pode retornar links de etiqueta e declaração de conteúdo.
+          Use estas ações para concluir etapas de envio no Melhor Envio quando necessário. O código de rastreio e os
+          dados da etiqueta são gravados automaticamente no pedido.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button

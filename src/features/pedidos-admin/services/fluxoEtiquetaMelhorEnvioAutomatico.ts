@@ -179,8 +179,7 @@ export async function executarFluxoEtiquetaMelhorEnvioAutomatico(
   if (docDest.length !== 11 && docDest.length !== 14) {
     return {
       ok: false,
-      message:
-        "Informe o CPF (11 dígitos) ou CNPJ (14 dígitos) do destinatário no campo abaixo e salve a logística. O cliente também pode preencher no checkout.",
+      message: "CPF/CNPJ do destinatário não encontrado no pedido. Peça para o cliente preencher no checkout.",
     };
   }
 
@@ -318,7 +317,6 @@ export async function executarFluxoEtiquetaMelhorEnvioAutomatico(
       platform: "AccorsiAutoPeças",
       reminder: `Pedido ${pedidoId.slice(0, 8)}`,
       tags: [{ tag: pedidoId }],
-      dce: { key: "" },
     },
   };
 

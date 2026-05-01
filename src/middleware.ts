@@ -79,6 +79,21 @@ export async function middleware(request: NextRequest) {
   const { data: authData } = await supabase.auth.getUser();
 
   const user = authData.user;
+  let profileRole: string | null | undefined;
+
+  const getProfileRole = async (): Promise<string | null> => {
+    if (!user) return null;
+    if (profileRole !== undefined) return profileRole;
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    profileRole = profile?.role ?? null;
+    return profileRole;
+  };
 
   if (MAINTENANCE_MODE && !isMaintenanceBypassPath(pathname)) {
     const isApi = pathname.startsWith("/api/");
@@ -93,13 +108,9 @@ export async function middleware(request: NextRequest) {
       return applyResponseCookies(response, NextResponse.redirect(dest));
     }
 
-    const { data: profileMaintenance } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
+    const role = await getProfileRole();
 
-    if (profileMaintenance?.role !== "admin") {
+    if (role !== "admin") {
       if (isApi) {
         return NextResponse.json(
           { error: "Loja em preparação." },
@@ -142,13 +153,9 @@ export async function middleware(request: NextRequest) {
       return applyResponseCookies(response, redirect);
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
+    const role = await getProfileRole();
 
-    if (profile?.role !== "admin") {
+    if (role !== "admin") {
       if (
         pathname.startsWith("/api/admin") ||
         pathname.startsWith("/api/integrations/melhor-envio")

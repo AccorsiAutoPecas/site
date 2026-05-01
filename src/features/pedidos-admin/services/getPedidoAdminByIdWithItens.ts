@@ -81,5 +81,25 @@ export const getPedidoAdminByIdWithItens = cache(async function getPedidoAdminBy
     cliente_email = null;
   }
 
-  return { ...row, pedido_itens: sorted, cliente_email };
+  let codigo_ui: number | null = null;
+  try {
+    const { count: olderCount } = await supabase
+      .from("pedidos")
+      .select("id", { head: true, count: "exact" })
+      .lt("created_at", row.created_at);
+
+    const { count: sameMomentCount } = await supabase
+      .from("pedidos")
+      .select("id", { head: true, count: "exact" })
+      .eq("created_at", row.created_at)
+      .lte("id", row.id);
+
+    const a = olderCount ?? 0;
+    const b = sameMomentCount ?? 0;
+    codigo_ui = a + b;
+  } catch {
+    codigo_ui = null;
+  }
+
+  return { ...row, pedido_itens: sorted, cliente_email, codigo_ui };
 });

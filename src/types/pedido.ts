@@ -60,6 +60,8 @@ export type AdminPedidoListRow = {
 };
 
 export type AdminPedidoDetailWithItens = PedidoDetailWithItens & {
+  /** Código sequencial para UI admin (001, 002, ...). */
+  codigo_ui?: number | null;
   user_id: string;
   /** CPF/CNPJ (somente dígitos recomendado) para Melhor Envio / declaração de conteúdo. */
   destinatario_documento: string | null;

@@ -99,6 +99,10 @@ function validatePayload(payload: CheckoutPayload): string | null {
         return "Preencha todos os dados obrigatórios de entrega.";
       }
     }
+    const doc = (payload.destinatario_documento ?? "").replace(/\D/g, "").trim();
+    if (doc.length !== 11 && doc.length !== 14) {
+      return "Informe CPF (11 dígitos) ou CNPJ (14 dígitos) do destinatário para entrega.";
+    }
   }
   const fp = payload.forma_pagamento;
   if (fp !== "pix" && fp !== "cartao") {
@@ -192,7 +196,7 @@ export async function criarPedidoECheckout(
 
   const docOpt = (payload.destinatario_documento ?? "").replace(/\D/g, "").trim();
   const p_destinatario_documento =
-    !retirada && docOpt && (docOpt.length === 11 || docOpt.length === 14) ? docOpt : null;
+    !retirada && (docOpt.length === 11 || docOpt.length === 14) ? docOpt : null;
 
   const { data: pedidoIdRaw, error: rpcError } = await supabase.rpc("criar_pedido_checkout", {
     p_itens,

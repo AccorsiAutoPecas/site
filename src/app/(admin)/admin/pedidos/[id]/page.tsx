@@ -12,6 +12,7 @@ import {
   formatPedidoDate,
   formatPedidoMoney,
   formatPedidoStatus,
+  formatPedidoUiCode,
 } from "@/features/pedidos/utils/pedidoDisplay";
 import { isUuid } from "@/features/pedidos/utils/isUuid";
 import type { PedidoLogisticaStatus } from "@/types/pedido";
@@ -72,6 +73,7 @@ export default async function AdminPedidoDetailPage({ params }: PageProps) {
   }
 
   const meSaldo = await loadMelhorEnvioSaldoInicial();
+  const pedidoCodigo = formatPedidoUiCode(pedido.codigo_ui);
 
   return (
     <div className="space-y-8">
@@ -87,7 +89,7 @@ export default async function AdminPedidoDetailPage({ params }: PageProps) {
       <div className="flex flex-col gap-3 border-b border-gray-100 pb-6 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Pedido</p>
-          <p className="mt-1 break-all font-mono text-sm text-gray-900">{pedido.id}</p>
+          <p className="mt-1 font-mono text-lg text-gray-900">#{pedidoCodigo}</p>
           <p className="mt-2 text-sm text-gray-500">{formatPedidoDate(pedido.created_at)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -117,8 +119,8 @@ export default async function AdminPedidoDetailPage({ params }: PageProps) {
               <dd className="font-medium text-gray-900">{pedido.cliente_email ?? "—"}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">ID do usuário</dt>
-              <dd className="break-all font-mono text-xs text-gray-700">{pedido.user_id}</dd>
+              <dt className="text-gray-500">CPF / CNPJ</dt>
+              <dd className="text-gray-900">{pedido.destinatario_documento ?? "—"}</dd>
             </div>
             <div>
               <dt className="text-gray-500">Nome (entrega)</dt>
@@ -136,12 +138,6 @@ export default async function AdminPedidoDetailPage({ params }: PageProps) {
             <div>
               <dt className="text-gray-500">Mercado Pago (status)</dt>
               <dd className="text-gray-900">{pedido.mercadopago_status ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-gray-500">ID preferência</dt>
-              <dd className="break-all font-mono text-xs text-gray-700">
-                {pedido.mercadopago_preference_id ?? "—"}
-              </dd>
             </div>
             <div>
               <dt className="text-gray-500">ID pagamento</dt>
