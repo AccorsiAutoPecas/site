@@ -58,6 +58,7 @@ export function CheckoutPage({
 
   const [destinatarioNome, setDestinatarioNome] = useState(() => defaultDestinatarioNome.trim());
   const [telefone, setTelefone] = useState(() => initialEndereco.telefone);
+  const [destinatarioDocumento, setDestinatarioDocumento] = useState("");
   const [cep, setCep] = useState(() => initialEndereco.cep);
   const [logradouro, setLogradouro] = useState(() => initialEndereco.logradouro);
   const [numero, setNumero] = useState(() => initialEndereco.numero);
@@ -131,6 +132,12 @@ export function CheckoutPage({
       return;
     }
 
+    const docDigits = destinatarioDocumento.replace(/\D/g, "");
+    if (modoEntrega === "envio" && docDigits && docDigits.length !== 11 && docDigits.length !== 14) {
+      setFormError("CPF do destinatário deve ter 11 dígitos ou CNPJ 14 (somente números), ou deixe em branco.");
+      return;
+    }
+
     const retirada = modoEntrega === "retirada";
     if (retirada && !lojaRetirada) {
       setFormError("Retirada na loja nao esta disponivel no momento.");
@@ -159,6 +166,7 @@ export function CheckoutPage({
           forma_pagamento: formaPagamento,
           destinatario_nome: destinatarioNome.trim(),
           telefone: telefone.trim(),
+          destinatario_documento: docDigits || undefined,
           cep: cep.trim(),
           logradouro: logradouro.trim(),
           numero: numero.trim(),
@@ -416,6 +424,25 @@ export function CheckoutPage({
                           }
                           className={inputClass}
                           required
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label
+                          htmlFor={`${baseId}-doc`}
+                          className="text-sm font-medium text-store-navy"
+                        >
+                          CPF ou CNPJ do destinatário{" "}
+                          <span className="font-normal text-store-navy-muted">(opcional)</span>
+                        </label>
+                        <input
+                          id={`${baseId}-doc`}
+                          name="destinatario_documento"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          value={destinatarioDocumento}
+                          onChange={(e) => setDestinatarioDocumento(e.target.value)}
+                          className={inputClass}
+                          placeholder="Para envio com Melhor Envio (declaração de conteúdo)"
                         />
                       </div>
                     </>

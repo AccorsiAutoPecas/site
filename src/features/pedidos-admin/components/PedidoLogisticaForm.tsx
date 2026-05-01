@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import { atualizarPedidoLogisticaAction } from "@/features/pedidos-admin/services/atualizarPedidoLogistica";
+import { PedidoMelhorEnvioFluxoAutomatico } from "@/features/pedidos-admin/components/PedidoMelhorEnvioFluxoAutomatico";
 import {
   comprarEnvioMelhorEnvioAction,
   gerarEtiquetaMelhorEnvioAction,
@@ -36,6 +37,8 @@ export function PedidoLogisticaForm({ pedido }: { pedido: AdminPedidoDetailWithI
   return (
     <form action={formAction} className="space-y-5">
       <input type="hidden" name="pedido_id" value={pedido.id} />
+
+      <PedidoMelhorEnvioFluxoAutomatico pedidoId={pedido.id} retiradaLoja={pedido.retirada_loja === true} />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2 rounded-lg border border-amber-100 bg-amber-50/80 px-4 py-3">
@@ -106,6 +109,24 @@ export function PedidoLogisticaForm({ pedido }: { pedido: AdminPedidoDetailWithI
               </option>
             ))}
           </select>
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className="block text-sm font-medium text-gray-700" htmlFor="destinatario_documento">
+            CPF / CNPJ do destinatário (Melhor Envio)
+          </label>
+          <input
+            id="destinatario_documento"
+            name="destinatario_documento"
+            type="text"
+            className={inputClass}
+            defaultValue={pedido.destinatario_documento ?? ""}
+            placeholder="Somente dígitos — obrigatório para fluxo automático de etiqueta"
+            autoComplete="off"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            Usado na declaração de conteúdo. O cliente pode informar no checkout se você ativar o campo lá.
+          </p>
         </div>
 
         <div className="sm:col-span-2">

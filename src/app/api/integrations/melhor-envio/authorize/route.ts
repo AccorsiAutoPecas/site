@@ -18,7 +18,7 @@ function resolveDefaultScopes(): string {
   if (raw) {
     return raw;
   }
-  return "shipping-calculate";
+  return "shipping-calculate cart-read cart-write shipping-checkout shipping-generate shipping-print";
 }
 
 function requireRedirectUri(): string | null {

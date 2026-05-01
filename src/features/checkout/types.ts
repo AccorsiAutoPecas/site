@@ -9,6 +9,8 @@ export type CheckoutCartLineInput = {
 export type CheckoutEntregaInput = {
   destinatario_nome: string;
   telefone: string;
+  /** CPF (11) ou CNPJ (14) só dígitos — opcional; usado no Melhor Envio / declaração de conteúdo. */
+  destinatario_documento?: string;
   cep: string;
   logradouro: string;
   numero: string;

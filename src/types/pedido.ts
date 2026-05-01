@@ -61,6 +61,8 @@ export type AdminPedidoListRow = {
 
 export type AdminPedidoDetailWithItens = PedidoDetailWithItens & {
   user_id: string;
+  /** CPF/CNPJ (somente dígitos recomendado) para Melhor Envio / declaração de conteúdo. */
+  destinatario_documento: string | null;
   mercadopago_preference_id: string | null;
   rastreio_codigo: string | null;
   rastreio_url: string | null;

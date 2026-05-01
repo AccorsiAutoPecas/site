@@ -3,6 +3,7 @@ export {
   ensureMelhorEnvioAccessToken,
 } from "./ensureMelhorEnvioAccessToken";
 export {
+  addShipmentToMelhorEnvioCart,
   createOrder,
   fetchMelhorEnvioBalance,
   getMelhorEnvioConfigFromEnv,
@@ -25,6 +26,7 @@ export {
 export { upsertMelhorEnvioCredentials } from "./upsertMelhorEnvioCredentials";
 export type { RefreshedMelhorEnvioCredentials } from "./oauthToken";
 export type {
+  MelhorEnvioCartAddResult,
   MelhorEnvioCreateOrderInput,
   MelhorEnvioCreateOrderResult,
   MelhorEnvioDimensions,

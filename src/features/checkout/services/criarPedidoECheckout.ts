@@ -190,6 +190,10 @@ export async function criarPedidoECheckout(
   const cidade = loja ? loja.cidade : payload.cidade.trim();
   const uf = loja ? loja.uf : payload.uf.trim();
 
+  const docOpt = (payload.destinatario_documento ?? "").replace(/\D/g, "").trim();
+  const p_destinatario_documento =
+    !retirada && docOpt && (docOpt.length === 11 || docOpt.length === 14) ? docOpt : null;
+
   const { data: pedidoIdRaw, error: rpcError } = await supabase.rpc("criar_pedido_checkout", {
     p_itens,
     p_frete: retirada ? 0 : payload.frete,
@@ -203,6 +207,7 @@ export async function criarPedidoECheckout(
     p_cidade: cidade,
     p_uf: uf,
     p_forma_pagamento: forma,
+    p_destinatario_documento,
     p_retirada_loja: retirada,
   });
 

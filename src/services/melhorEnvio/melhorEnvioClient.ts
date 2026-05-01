@@ -9,6 +9,7 @@ import {
   resolveMelhorEnvioUserAgent,
 } from "./oauthToken";
 import type {
+  MelhorEnvioCartAddResult,
   MelhorEnvioCreateOrderInput,
   MelhorEnvioCreateOrderResult,
   MelhorEnvioDimensions,
@@ -154,6 +155,79 @@ export async function fetchMelhorEnvioBalance(accessToken: string): Promise<Melh
     balance,
     reserved: Number.isFinite(reserved) ? reserved : 0,
     debts: Number.isFinite(debts) ? debts : 0,
+  };
+}
+
+/**
+ * Cria envio no carrinho Melhor Envio (`POST /api/v2/me/cart`).
+ * Requer escopos OAuth: `cart-write` (e cotação prévia com o mesmo token).
+ */
+export async function addShipmentToMelhorEnvioCart(
+  payload: Record<string, unknown>,
+  accessToken: string,
+): Promise<MelhorEnvioCartAddResult> {
+  const token = accessToken.trim();
+  if (!token) {
+    return { ok: false, code: "invalid_input", message: "Token ausente." };
+  }
+  const base = resolveMelhorEnvioOAuthBaseUrl();
+  const url = `${base}/api/v2/me/cart`;
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: melhorEnvioAuthorizedJsonHeaders(token),
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    return {
+      ok: false,
+      code: "network_error",
+      message: "Falha de rede ao criar envio no carrinho do Melhor Envio.",
+    };
+  }
+
+  let json: unknown;
+  try {
+    json = await response.json();
+  } catch {
+    return {
+      ok: false,
+      code: "invalid_response",
+      message: "Resposta inválida do Melhor Envio ao criar envio no carrinho.",
+    };
+  }
+
+  if (response.status === 201 || response.status === 200) {
+    const o = json as Record<string, unknown>;
+    const idRaw = o.id;
+    const id =
+      typeof idRaw === "string"
+        ? idRaw.trim()
+        : idRaw !== undefined && idRaw !== null
+          ? String(idRaw).trim()
+          : "";
+    if (id) {
+      const protocol = typeof o.protocol === "string" ? o.protocol : undefined;
+      return { ok: true, orderId: id, protocol };
+    }
+    return {
+      ok: false,
+      code: "invalid_response",
+      message: "Resposta do carrinho Melhor Envio sem id do envio.",
+    };
+  }
+
+  let msg = "";
+  if (json && typeof json === "object" && json !== null) {
+    const rec = json as Record<string, unknown>;
+    if (typeof rec.message === "string") msg = rec.message;
+    else if (typeof rec.error === "string") msg = rec.error;
+  }
+  return {
+    ok: false,
+    code: "api_error",
+    message: msg || `Melhor Envio rejeitou o carrinho (HTTP ${response.status}).`,
   };
 }
 

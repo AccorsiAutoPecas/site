@@ -18,6 +18,7 @@ function buildPatch(formData: FormData): Record<string, string | boolean | null>
   const retirada_loja = retiradaRaw === "on" || retiradaRaw === "1" || retiradaRaw === "true";
 
   return {
+    destinatario_documento: str("destinatario_documento"),
     rastreio_codigo: str("rastreio_codigo"),
     rastreio_url: str("rastreio_url"),
     transportadora_nome: str("transportadora_nome"),

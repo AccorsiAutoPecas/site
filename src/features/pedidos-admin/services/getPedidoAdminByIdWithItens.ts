@@ -25,6 +25,7 @@ export const getPedidoAdminByIdWithItens = cache(async function getPedidoAdminBy
       total,
       created_at,
       destinatario_nome,
+      destinatario_documento,
       telefone,
       cep,
       logradouro,

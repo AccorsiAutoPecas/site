@@ -75,3 +75,8 @@ export type MelhorEnvioErrorResult = {
     | "invalid_response";
   message: string;
 };
+
+/** Resposta de POST /api/v2/me/cart (criar envio no carrinho). */
+export type MelhorEnvioCartAddResult =
+  | { ok: true; orderId: string; protocol?: string }
+  | { ok: false; code: "invalid_input" | "network_error" | "api_error" | "invalid_response"; message: string };
