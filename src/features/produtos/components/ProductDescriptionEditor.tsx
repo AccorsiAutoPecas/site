@@ -3,7 +3,7 @@
 import TextAlign from "@tiptap/extension-text-align";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { useEffect, useRef } from "react";
+import { useState } from "react";
 
 const shellClass =
   "rounded-lg border border-gray-200 bg-white text-sm text-gray-900 shadow-sm focus-within:border-admin-accent focus-within:ring-2 focus-within:ring-[#1d63ed]/20";
@@ -29,8 +29,8 @@ export function ProductDescriptionEditor({
   initialHtml = "",
   fieldId = "descricao",
 }: Props) {
-  const hiddenRef = useRef<HTMLInputElement>(null);
   const initial = (initialHtml || "").trim() || emptyDoc();
+  const [htmlForSubmit, setHtmlForSubmit] = useState(initial);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -52,6 +52,9 @@ export function ProductDescriptionEditor({
       }),
     ],
     content: initial,
+    onCreate: ({ editor: ed }) => {
+      setHtmlForSubmit(ed.getHTML());
+    },
     editorProps: {
       attributes: {
         class:
@@ -59,14 +62,9 @@ export function ProductDescriptionEditor({
       },
     },
     onUpdate: ({ editor: ed }) => {
-      if (hiddenRef.current) hiddenRef.current.value = ed.getHTML();
+      setHtmlForSubmit(ed.getHTML());
     },
   });
-
-  useEffect(() => {
-    if (!editor) return;
-    if (hiddenRef.current) hiddenRef.current.value = editor.getHTML();
-  }, [editor]);
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -74,7 +72,7 @@ export function ProductDescriptionEditor({
         Use <strong className="font-semibold">Negrito</strong> e o alinhamento por parágrafo. Enter cria novo parágrafo;
         Shift+Enter quebra linha no mesmo parágrafo.
       </p>
-      <input ref={hiddenRef} type="hidden" name={name} defaultValue={initial} />
+      <input type="hidden" name={name} value={htmlForSubmit} readOnly onChange={() => {}} aria-hidden />
       <div className={shellClass}>
         {editor ? (
           <div className="flex flex-wrap items-center gap-0.5 border-b border-gray-100 px-2 py-1.5">

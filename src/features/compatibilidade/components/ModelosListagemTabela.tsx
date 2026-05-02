@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ModeloTableRow } from "@/features/compatibilidade/components/ModeloTableRow";
 import { deleteModelosEmLote } from "@/features/compatibilidade/services/modeloActions";
 
@@ -109,53 +110,26 @@ export function ModelosListagemTabela({ items }: { items: ModeloListagemItem[] }
           Reflete só os modelos visíveis com marca e busca atuais.
         </p>
       </div>
-      {bulkDeleteConfirmOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-6">
-          <button
-            type="button"
-            aria-label="Fechar confirmação"
-            className="absolute inset-0 bg-black/50"
-            onClick={() => !pending && setBulkDeleteConfirmOpen(false)}
-          />
-          <div
-            className="relative z-10 w-full max-w-md overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-2xl sm:p-6"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="bulk-delete-modelos-title"
-            aria-describedby="bulk-delete-modelos-desc"
-          >
-            <h3 id="bulk-delete-modelos-title" className="text-base font-semibold text-gray-900">
-              Tem certeza?
-            </h3>
-            <p id="bulk-delete-modelos-desc" className="mt-2 text-sm text-gray-600">
-              Você vai excluir <strong>{selectedInView.length}</strong> modelo
-              {selectedInView.length === 1 ? "" : "s"} visíve
-              {selectedInView.length === 1 ? "l" : "is"} nesta listagem (marca e busca atuais). Compatibilidades de
-              produtos e anos de referência ligados{" "}
-              {selectedInView.length === 1 ? "a ele serão impactados" : "a eles serão impactados"}.{" "}
-              <span className="font-medium text-gray-800">Esta ação não pode ser desfeita.</span>
-            </p>
-            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={() => setBulkDeleteConfirmOpen(false)}
-                disabled={pending}
-                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-50 disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={runBulkDelete}
-                disabled={pending}
-                className="rounded-lg border border-red-300 bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
-              >
-                Sim, excluir
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={bulkDeleteConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open && !pending) setBulkDeleteConfirmOpen(false);
+        }}
+        title="Tem certeza?"
+        description={
+          <p>
+            Você vai excluir <strong className="text-gray-800">{selectedInView.length}</strong> modelo
+            {selectedInView.length === 1 ? "" : "s"} visíve
+            {selectedInView.length === 1 ? "l" : "is"} nesta listagem (marca e busca atuais). Compatibilidades de
+            produtos e anos de referência ligados{" "}
+            {selectedInView.length === 1 ? "a ele serão impactados" : "a eles serão impactados"}.{" "}
+            <span className="font-medium text-gray-800">Esta ação não pode ser desfeita.</span>
+          </p>
+        }
+        confirmLabel="Sim, excluir"
+        pending={pending}
+        onConfirm={runBulkDelete}
+      />
       {bulkMessage && (
         <p className="px-4 text-xs text-gray-700" role="status">
           {bulkMessage}

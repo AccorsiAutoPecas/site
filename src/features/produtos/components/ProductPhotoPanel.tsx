@@ -8,13 +8,64 @@ const ACCENT = "#1d63ed";
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const REQUIRED_IMAGE_WIDTH = 1200;
 const REQUIRED_IMAGE_HEIGHT = 1200;
-const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const ALLOWED_MIME = new Set([
+  "image/jpeg",
+  "image/pjpeg",
+  "image/png",
+  "image/x-png",
+  "image/webp",
+  "image/gif",
+]);
 const EXT_FROM_MIME: Record<string, string> = {
   "image/jpeg": "jpg",
+  "image/pjpeg": "jpg",
   "image/png": "png",
+  "image/x-png": "png",
   "image/webp": "webp",
   "image/gif": "gif",
 };
+
+const EXT_TO_MIME: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+};
+
+function isHeicLike(file: File): boolean {
+  const t = file.type.toLowerCase();
+  if (t.includes("heic") || t.includes("heif")) return true;
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return ext === "heic" || ext === "heif";
+}
+
+/** Alguns navegadores/celulares enviam type vazio ou octet-stream; inferir pela extensão. */
+function normalizeImageFile(file: File): { file: File } | { error: string } {
+  if (isHeicLike(file)) {
+    return {
+      error:
+        "Fotos HEIC/HEIF (iPhone) não são aceitas direto no navegador. Nas configurações da câmera use «Formatos mais compatíveis», ou exporte a foto como JPEG antes de enviar.",
+    };
+  }
+  if (ALLOWED_MIME.has(file.type)) {
+    return { file };
+  }
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  const inferred = EXT_TO_MIME[ext];
+  if (inferred && ALLOWED_MIME.has(inferred)) {
+    return {
+      file: new File([file], file.name, { type: inferred, lastModified: file.lastModified }),
+    };
+  }
+  if (!file.type) {
+    return {
+      error:
+        "Não foi possível identificar o tipo da imagem. Renomeie com .jpg / .png / .webp ou tire a foto de novo em JPEG.",
+    };
+  }
+  return { error: "Use JPEG, PNG, WEBP ou GIF." };
+}
 
 const fieldClass =
   "rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-admin-accent focus:ring-2 focus:ring-[#1d63ed]/20";
@@ -129,6 +180,19 @@ type ProductPhotoPanelProps = {
   initialFotos?: ProductPhotoItem[];
 };
 
+/** Stable default so `useEffect([initialFotos])` does not see a new `[]` every render. */
+const EMPTY_INITIAL_FOTOS: ProductPhotoItem[] = [];
+
+function samePhotoList(a: ProductPhotoItem[], b: ProductPhotoItem[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (!y || x.foto !== y.foto || x.is_principal !== y.is_principal || x.ordem !== y.ordem) return false;
+  }
+  return true;
+}
+
 function normalizeInitialPhotos(initialFoto: string, initialFotos: ProductPhotoItem[]): ProductPhotoItem[] {
   const unique = new Set<string>();
   const normalized = initialFotos
@@ -154,7 +218,10 @@ function normalizeInitialPhotos(initialFoto: string, initialFotos: ProductPhotoI
   return normalized.map((item, idx) => ({ ...item, ordem: idx }));
 }
 
-export function ProductPhotoPanel({ initialFoto = "", initialFotos = [] }: ProductPhotoPanelProps) {
+export function ProductPhotoPanel({
+  initialFoto = "",
+  initialFotos = EMPTY_INITIAL_FOTOS,
+}: ProductPhotoPanelProps) {
   const [photos, setPhotos] = useState<ProductPhotoItem[]>(() =>
     normalizeInitialPhotos(initialFoto, initialFotos)
   );
@@ -167,7 +234,8 @@ export function ProductPhotoPanel({ initialFoto = "", initialFotos = [] }: Produ
   const dragCounter = useRef(0);
 
   useEffect(() => {
-    setPhotos(normalizeInitialPhotos(initialFoto, initialFotos));
+    const next = normalizeInitialPhotos(initialFoto, initialFotos);
+    setPhotos((prev) => (samePhotoList(prev, next) ? prev : next));
   }, [initialFoto, initialFotos]);
 
   const handleExcluirImagem = async (ref: string) => {
@@ -200,10 +268,12 @@ export function ProductPhotoPanel({ initialFoto = "", initialFotos = [] }: Produ
 
   const uploadFile = async (file: File): Promise<string | null> => {
     setError(null);
-    if (!ALLOWED_MIME.has(file.type)) {
-      setError("Use JPEG, PNG, WEBP ou GIF.");
+    const normalized = normalizeImageFile(file);
+    if ("error" in normalized) {
+      setError(normalized.error);
       return null;
     }
+    file = normalized.file;
     if (file.size > MAX_FILE_BYTES) {
       setError("Arquivo muito grande (máximo 5 MB).");
       return null;
@@ -473,7 +543,7 @@ export function ProductPhotoPanel({ initialFoto = "", initialFotos = [] }: Produ
           type="file"
           className="sr-only"
           multiple
-          accept="image/jpeg,image/png,image/webp,image/gif"
+          accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
           onChange={onFileChange}
         />
 
@@ -538,7 +608,10 @@ export function ProductPhotoPanel({ initialFoto = "", initialFotos = [] }: Produ
           <circle cx="8.5" cy="10" r="1.5" fill="currentColor" stroke="none" />
           <path d="M21 15l-5-5-4 4-2-2-5 5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        <p>Padrão: 1200x1200px (autoajuste para PNG/JPEG/WEBP) / GIF precisa já estar em 1200x1200</p>
+        <p>
+          Padrão: 1200×1200 px (redimensiona automaticamente PNG/JPEG/WEBP). GIF precisa já estar em 1200×1200. Envio
+          exige login no painel; máximo 5 MB por arquivo. iPhone: use JPEG (não HEIC).
+        </p>
       </div>
     </div>
   );

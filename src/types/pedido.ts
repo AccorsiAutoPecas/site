@@ -18,7 +18,8 @@ export type PedidoListRow = {
 
 export type PedidoItemRow = {
   id: string;
-  produto_id: string;
+  /** Null se o produto foi removido do catálogo após o pedido. */
+  produto_id: string | null;
   quantidade: number;
   preco_unitario: unknown;
   titulo_snapshot: string;

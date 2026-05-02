@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { deleteModelo } from "@/features/compatibilidade/services/modeloActions";
 import { ModeloAnosCell } from "@/features/compatibilidade/components/ModeloAnosCell";
 import {
@@ -29,16 +30,11 @@ export function ModeloTableRow({
   bulkCheckbox?: { checked: boolean; onChange: (checked: boolean) => void };
 }) {
   const [error, setError] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  function handleDelete() {
-    if (
-      !confirm(
-        `Excluir o modelo “${nome}” (${marcaNome})? As compatibilidades de produtos com este modelo e os anos de referência serão removidos. Esta ação não pode ser desfeita.`
-      )
-    ) {
-      return;
-    }
+  function runDelete() {
+    setDeleteOpen(false);
     setError(null);
     startTransition(async () => {
       const r = await deleteModelo(modeloId);
@@ -51,6 +47,21 @@ export function ModeloTableRow({
   const tipoLabel = TIPO_VEICULO_MODELO_LABELS[normalizeTipoVeiculoModeloFromDb(tipoVeiculo)];
 
   return (
+    <>
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Excluir modelo?"
+        description={
+          <>
+            Excluir o modelo <strong className="text-gray-800">“{nome}”</strong> ({marcaNome})? As
+            compatibilidades de produtos com este modelo e os anos de referência serão removidos.{" "}
+            <span className="font-medium text-gray-800">Esta ação não pode ser desfeita.</span>
+          </>
+        }
+        confirmLabel="Sim, excluir"
+        onConfirm={runDelete}
+      />
     <tr className="align-top text-gray-900 transition hover:bg-gray-50/80">
       {bulkCheckbox && (
         <td className="w-[1%] px-3 py-2 align-middle">
@@ -84,7 +95,7 @@ export function ModeloTableRow({
         <div className="flex justify-end">
           <button
             type="button"
-            onClick={handleDelete}
+            onClick={() => setDeleteOpen(true)}
             disabled={pending}
             className={`${iconBtn} text-red-600 hover:bg-red-50`}
             aria-label="Excluir modelo"
@@ -103,5 +114,6 @@ export function ModeloTableRow({
         </div>
       </td>
     </tr>
+    </>
   );
 }

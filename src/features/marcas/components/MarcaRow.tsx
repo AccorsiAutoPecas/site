@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { deleteMarca, updateMarca } from "@/features/marcas/services/marcaActions";
 
 const fieldClass =
@@ -13,6 +14,7 @@ export function MarcaRow({ marca }: { marca: { id: string; nome: string } }) {
   const [editing, setEditing] = useState(false);
   const [nome, setNome] = useState(marca.nome);
   const [error, setError] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
   function cancelEdit() {
@@ -36,8 +38,8 @@ export function MarcaRow({ marca }: { marca: { id: string; nome: string } }) {
     });
   }
 
-  function handleDelete() {
-    if (!confirm(`Excluir a marca “${marca.nome}”? Esta ação não pode ser desfeita.`)) return;
+  function runDelete() {
+    setDeleteOpen(false);
     setError(null);
     startTransition(async () => {
       const r = await deleteMarca(marca.id);
@@ -48,6 +50,20 @@ export function MarcaRow({ marca }: { marca: { id: string; nome: string } }) {
   }
 
   return (
+    <>
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Excluir marca?"
+        description={
+          <>
+            Excluir a marca <strong className="text-gray-800">“{marca.nome}”</strong>?{" "}
+            <span className="font-medium text-gray-800">Esta ação não pode ser desfeita.</span>
+          </>
+        }
+        confirmLabel="Sim, excluir"
+        onConfirm={runDelete}
+      />
     <tr className="text-gray-900 transition hover:bg-gray-50/80">
       <td className="px-4 py-2">
         {editing ? (
@@ -142,7 +158,7 @@ export function MarcaRow({ marca }: { marca: { id: string; nome: string } }) {
               </button>
               <button
                 type="button"
-                onClick={handleDelete}
+                onClick={() => setDeleteOpen(true)}
                 disabled={pending}
                 className={`${iconBtn} text-red-600 hover:bg-red-50`}
                 aria-label="Excluir marca"
@@ -163,5 +179,6 @@ export function MarcaRow({ marca }: { marca: { id: string; nome: string } }) {
         </div>
       </td>
     </tr>
+    </>
   );
 }

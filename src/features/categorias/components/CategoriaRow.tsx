@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { deleteCategoria, updateCategoria } from "@/features/categorias/services/categoriaActions";
 import { CategoriaIconeField } from "@/features/categorias/components/CategoriaIconeField";
 
@@ -30,6 +31,7 @@ export function CategoriaRow({
   const [iconeDraft, setIconeDraft] = useState<string | null>(categoria.icone);
   const [iconBusy, setIconBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
   function cancelEdit() {
@@ -56,9 +58,8 @@ export function CategoriaRow({
     });
   }
 
-  function handleDelete() {
-    if (!confirm(`Excluir a categoria “${categoria.nome}”? Os vínculos com produtos serão removidos.`))
-      return;
+  function runDelete() {
+    setDeleteOpen(false);
     setError(null);
     startTransition(async () => {
       const r = await deleteCategoria(categoria.id);
@@ -73,6 +74,20 @@ export function CategoriaRow({
   const thumb = thumbSrc(categoria.icone);
 
   return (
+    <>
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Excluir categoria?"
+        description={
+          <>
+            Excluir a categoria <strong className="text-gray-800">“{categoria.nome}”</strong>? Os vínculos com
+            produtos serão removidos.
+          </>
+        }
+        confirmLabel="Sim, excluir"
+        onConfirm={runDelete}
+      />
     <tr className="text-gray-900 transition hover:bg-gray-50/80">
       <td className="w-14 px-4 py-3.5 align-middle">
         {!editing && (
@@ -199,7 +214,7 @@ export function CategoriaRow({
               </button>
               <button
                 type="button"
-                onClick={handleDelete}
+                onClick={() => setDeleteOpen(true)}
                 disabled={pending}
                 className={`${iconBtn} text-red-600 hover:bg-red-50`}
                 aria-label="Excluir categoria"
@@ -220,5 +235,6 @@ export function CategoriaRow({
         </div>
       </td>
     </tr>
+    </>
   );
 }

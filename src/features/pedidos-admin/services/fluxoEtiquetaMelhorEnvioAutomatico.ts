@@ -79,6 +79,13 @@ async function loadQuoteLinesForPedido(
     return { error: "Pedido sem itens." };
   }
 
+  if (itens.some((r) => r.produto_id == null || String(r.produto_id).trim() === "")) {
+    return {
+      error:
+        "Pedido contém itens cujo produto foi removido do catálogo; não é possível calcular frete automático pelas dimensões do produto. Use outro fluxo ou recadastre o item.",
+    };
+  }
+
   const ids = [...new Set(itens.map((r) => String(r.produto_id)))];
   const { data: prodRows, error: prodErr } = await admin
     .from("produtos")

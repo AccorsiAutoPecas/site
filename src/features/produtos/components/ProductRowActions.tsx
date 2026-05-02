@@ -3,14 +3,16 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useTransition } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { deleteProduct } from "@/features/produtos/services/deleteProduct";
 
 export function ProductRowActions({ productId }: { productId: string }) {
   const [error, setError] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  function handleDelete() {
-    if (!confirm("Excluir este produto? Esta ação não pode ser desfeita.")) return;
+  function runDelete() {
+    setDeleteOpen(false);
     setError(null);
     startTransition(async () => {
       try {
@@ -26,6 +28,18 @@ export function ProductRowActions({ productId }: { productId: string }) {
 
   return (
     <div className="flex flex-col items-end gap-1">
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Excluir produto?"
+        description={
+          <span className="font-medium text-gray-800">
+            Excluir este produto? Esta ação não pode ser desfeita.
+          </span>
+        }
+        confirmLabel="Sim, excluir"
+        onConfirm={runDelete}
+      />
       <div className="flex flex-wrap justify-end gap-1">
         <Link
           href={`/admin/produtos/${productId}/edit`}
@@ -37,7 +51,7 @@ export function ProductRowActions({ productId }: { productId: string }) {
         </Link>
         <button
           type="button"
-          onClick={handleDelete}
+          onClick={() => setDeleteOpen(true)}
           disabled={pending}
           className="inline-flex h-9 w-9 items-center justify-center rounded-full text-red-600 hover:bg-red-50 disabled:opacity-60"
           aria-label="Excluir produto"

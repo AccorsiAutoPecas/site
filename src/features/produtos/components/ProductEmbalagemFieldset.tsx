@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { createEmbalagem, deleteEmbalagem } from "@/features/produtos/services/embalagemActions";
 
 export type EmbalagemOption = {
@@ -32,6 +33,7 @@ export function ProductEmbalagemFieldset({
   const [createState, createAction, createPending] = useActionState(createEmbalagem, null);
   const [deletePending, startDelete] = useTransition();
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [createDraft, setCreateDraft] = useState({
     nome: "",
     comprimento_cm: "",
@@ -81,10 +83,10 @@ export function ProductEmbalagemFieldset({
     createAction(fd);
   }
 
-  function submitDelete(id: string) {
-    if (!window.confirm("Remover esta embalagem do catálogo? Produtos que a usavam ficarão sem embalagem.")) {
-      return;
-    }
+  function runDeleteEmbalagem() {
+    const id = deleteId;
+    if (!id) return;
+    setDeleteId(null);
     const fd = new FormData();
     fd.set("id", id);
     startDelete(async () => {
@@ -101,6 +103,17 @@ export function ProductEmbalagemFieldset({
 
   return (
     <div className="space-y-6">
+      <ConfirmDialog
+        open={deleteId !== null}
+        onOpenChange={(open) => {
+          if (!open && !deletePending) setDeleteId(null);
+        }}
+        title="Remover embalagem?"
+        description="Remover esta embalagem do catálogo? Produtos que a usavam ficarão sem embalagem."
+        confirmLabel="Sim, remover"
+        pending={deletePending}
+        onConfirm={runDeleteEmbalagem}
+      />
       <fieldset className="space-y-4 rounded-xl border border-gray-100 bg-gray-50/50 p-4 md:p-5">
         <legend className="text-sm font-semibold text-gray-900">Embalagens fixas (catálogo)</legend>
         <p className="text-xs leading-relaxed text-gray-600">
@@ -215,7 +228,7 @@ export function ProductEmbalagemFieldset({
                 <button
                   type="button"
                   disabled={deletePending}
-                  onClick={() => submitDelete(e.id)}
+                  onClick={() => setDeleteId(e.id)}
                   className="shrink-0 rounded-md text-xs font-semibold text-red-700 hover:underline disabled:opacity-50"
                 >
                   Excluir
