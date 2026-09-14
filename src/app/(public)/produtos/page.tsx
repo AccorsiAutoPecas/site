@@ -4,22 +4,26 @@ import { SiteFooter } from "@/components/layout/SiteFooter";
 import { StoreProductSearchBar } from "@/components/store/StoreProductSearchBar";
 import { getHomeCategories } from "@/features/categorias/services/getHomeCategories";
 import { getStoreMarcas } from "@/features/marcas/services/getStoreMarcas";
+import { CatalogPagination } from "@/features/produtos/components/CatalogPagination";
 import { ProductCatalogFilters } from "@/features/produtos/components/ProductCatalogFilters";
 import { ProductsGrid } from "@/features/produtos/components/ProductsGrid";
-import { getCatalogProducts, getCatalogSliderMax } from "@/features/produtos/services/getCatalogProducts";
+import {
+  CATALOG_PAGE_SIZE,
+  getCatalogProducts,
+  getCatalogSliderMax,
+} from "@/features/produtos/services/getCatalogProducts";
 import { searchPublishedKits } from "@/features/kits/services/getHomeKits";
 import { KitsSection } from "@/features/kits/components/KitsSection";
 import { getVehicleFilterCatalogData } from "@/features/compatibilidade/services/getVehicleFilterCatalogData";
 import {
+  catalogFiltersToSearchParams,
   catalogFilterSummary,
   catalogFiltersActive,
   normalizeCatalogFilters,
+  parseCatalogPage,
   parseCatalogSearchParams,
 } from "@/features/produtos/utils/catalogSearchParams";
 import { storeShellContent, storeShellInset } from "@/config/storeShell";
-
-/** Filtro por veículo usa o mesmo catálogo da home; evita lista desatualizada após alterações no admin. */
-export const dynamic = "force-dynamic";
 
 export default async function ProdutosPage({
   searchParams,
@@ -27,22 +31,38 @@ export default async function ProdutosPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const sliderMax = await getCatalogSliderMax();
-  const filters = normalizeCatalogFilters(parseCatalogSearchParams(sp), sliderMax);
+  const requestedPage = parseCatalogPage(sp);
 
-  const [categorias, marcas, produtos, vehicleFilterData, kitsBusca] = await Promise.all([
+  const [sliderMax, categorias, marcas] = await Promise.all([
+    getCatalogSliderMax(),
     getHomeCategories(),
     getStoreMarcas(),
-    getCatalogProducts(filters, sliderMax),
-    getVehicleFilterCatalogData(),
+  ]);
+
+  const filters = normalizeCatalogFilters(parseCatalogSearchParams(sp), sliderMax);
+
+  const [catalogPage, vehicleFilterData, kitsBusca] = await Promise.all([
+    getCatalogProducts(filters, sliderMax, requestedPage, CATALOG_PAGE_SIZE),
+    getVehicleFilterCatalogData({ modeloIdForAnos: filters.modeloId }),
     filters.q?.trim() ? searchPublishedKits(filters.q.trim()) : Promise.resolve([]),
   ]);
+
+  const page =
+    catalogPage.totalPages > 0 && requestedPage > catalogPage.totalPages
+      ? catalogPage.totalPages
+      : catalogPage.page;
+  const produtos =
+    page !== catalogPage.page && catalogPage.totalPages > 0
+      ? (await getCatalogProducts(filters, sliderMax, page, CATALOG_PAGE_SIZE)).produtos
+      : catalogPage.produtos;
 
   const summary = catalogFilterSummary(filters, categorias, marcas, sliderMax);
   const filtering = catalogFiltersActive(filters, sliderMax) || Boolean(filters.q?.trim());
   const emptyMessage = filtering
     ? "Nenhum produto encontrado com os filtros ou a busca atuais. Ajuste e tente de novo."
     : "Nenhum produto cadastrado ainda. Assim que houver itens no catálogo, eles aparecerão aqui.";
+
+  const baseQuery = catalogFiltersToSearchParams(filters, sliderMax);
 
   return (
     <div className="flex min-h-dvh flex-col bg-store-cream font-sans text-store-navy">
@@ -100,6 +120,14 @@ export default async function ProdutosPage({
                     <p className="text-sm font-normal text-store-navy-muted sm:pb-0.5">— {summary}</p>
                   </div>
                   <div className="mt-2 h-1 w-14 rounded-[1px] bg-store-navy sm:w-16" aria-hidden />
+                  {catalogPage.total > 0 ? (
+                    <p className="mt-2 text-xs text-store-navy-muted tabular-nums">
+                      {catalogPage.total} produto{catalogPage.total === 1 ? "" : "s"}
+                      {catalogPage.totalPages > 1
+                        ? ` · página ${page} de ${catalogPage.totalPages}`
+                        : ""}
+                    </p>
+                  ) : null}
                 </div>
               </header>
 
@@ -108,6 +136,11 @@ export default async function ProdutosPage({
               ) : null}
 
               <ProductsGrid variant="catalog" produtos={produtos} emptyMessage={emptyMessage} />
+              <CatalogPagination
+                page={page}
+                totalPages={catalogPage.totalPages}
+                baseQuery={baseQuery}
+              />
             </div>
           </div>
         </div>

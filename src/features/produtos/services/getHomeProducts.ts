@@ -1,11 +1,15 @@
-import { createClient } from "@/services/supabase/server";
+import { cache } from "react";
+import { unstable_cache } from "next/cache";
+
 import { fetchProductIdsMatchingSearchTerm } from "@/features/produtos/services/productSearchMatchingIds";
+import { CATALOG_CACHE_TAGS } from "@/features/produtos/utils/catalogCacheTags";
 import {
   mapProductSummaryRow,
   PRODUCT_SUMMARY_SELECT,
   type ProductSummaryRow,
 } from "@/features/produtos/utils/mapProductSummaryRow";
 import { PRODUCT_STATUS_PUBLISHED } from "@/features/produtos/utils/productStatus";
+import { createPublicClient } from "@/services/supabase/public";
 import type { ProductSummary } from "@/types/product";
 
 function intersectIds(a: string[], bSet: Set<string>): string[] {
@@ -13,7 +17,7 @@ function intersectIds(a: string[], bSet: Set<string>): string[] {
 }
 
 async function fetchCompatTodosModelosIds(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: ReturnType<typeof createPublicClient>
 ): Promise<string[]> {
   const { data, error } = await supabase
     .from("produtos")
@@ -28,7 +32,7 @@ function mapRows(rows: ProductSummaryRow[]): ProductSummary[] {
   return rows.map((row) => mapProductSummaryRow(row));
 }
 
-export async function getHomeProducts(opts?: {
+async function fetchHomeProducts(opts?: {
   q?: string | null;
   modeloId?: string | null;
   anoVeiculo?: number | null;
@@ -37,7 +41,7 @@ export async function getHomeProducts(opts?: {
   vitrine: ProductSummary[];
 }> {
   try {
-    const supabase = await createClient();
+    const supabase = createPublicClient();
     const rawSearch = opts?.q?.trim();
     let searchIds: string[] | null = null;
     if (rawSearch) {
@@ -82,32 +86,44 @@ export async function getHomeProducts(opts?: {
       .limit(15);
     if (filterIds) destQuery = destQuery.in("id", filterIds);
 
-    const destRes = await destQuery;
-    const destaque = !destRes.error && destRes.data ? mapRows(destRes.data as ProductSummaryRow[]) : [];
-    const destIds = destaque.map((p) => p.id);
-
+    // Busca vitrine em paralelo (limite maior) e remove destaques depois — mesmo resultado, menos latência.
     let vitQuery = supabase
       .from("produtos")
       .select(PRODUCT_SUMMARY_SELECT)
       .eq("status", PRODUCT_STATUS_PUBLISHED)
       .order("titulo")
-      .limit(10);
+      .limit(25);
     if (filterIds) vitQuery = vitQuery.in("id", filterIds);
-    if (destIds.length > 0) {
-      vitQuery = vitQuery.not(
-        "id",
-        "in",
-        `(${destIds.map((id) => `"${id}"`).join(",")})`,
-      );
-    }
 
-    const prodRes = await vitQuery;
+    const [destRes, vitRes] = await Promise.all([destQuery, vitQuery]);
+    const destaque = !destRes.error && destRes.data ? mapRows(destRes.data as ProductSummaryRow[]) : [];
+    const destIdSet = new Set(destaque.map((p) => p.id));
+    const vitrineRaw =
+      !vitRes.error && vitRes.data ? mapRows(vitRes.data as ProductSummaryRow[]) : [];
+    const vitrine = vitrineRaw.filter((p) => !destIdSet.has(p.id)).slice(0, 10);
 
-    return {
-      destaque,
-      vitrine: !prodRes.error && prodRes.data ? mapRows(prodRes.data as ProductSummaryRow[]) : [],
-    };
+    return { destaque, vitrine };
   } catch {
     return { destaque: [], vitrine: [] };
   }
 }
+
+export const getHomeProducts = cache(async function getHomeProducts(opts?: {
+  q?: string | null;
+  modeloId?: string | null;
+  anoVeiculo?: number | null;
+}): Promise<{
+  destaque: ProductSummary[];
+  vitrine: ProductSummary[];
+}> {
+  const key = JSON.stringify({
+    q: opts?.q ?? null,
+    modeloId: opts?.modeloId ?? null,
+    anoVeiculo: opts?.anoVeiculo ?? null,
+  });
+  return unstable_cache(
+    async () => fetchHomeProducts(opts),
+    ["home-products", key],
+    { tags: [CATALOG_CACHE_TAGS.homeProducts], revalidate: 60 }
+  )();
+});

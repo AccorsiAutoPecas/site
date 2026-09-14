@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { slugify } from "@/utils/slugify";
 import { createClient } from "@/services/supabase/server";
 import { revalidatePath } from "next/cache";
+import { revalidateStoreCatalogCache } from "@/features/produtos/utils/catalogCacheTags";
 import { redirect } from "next/navigation";
 import { parseTipoVeiculoModelo } from "@/features/compatibilidade/constants/tipoVeiculoModelo";
 import type { ModeloListagemItem } from "@/features/compatibilidade/components/ModelosListagemTabela";
@@ -147,6 +148,7 @@ export async function createModelo(
   revalidatePath("/admin");
   revalidatePath("/");
   revalidatePath("/produtos");
+  revalidateStoreCatalogCache();
   redirect("/admin/marcas-e-modelos?cadastrado=modelo");
 }
 
@@ -223,6 +225,7 @@ export async function updateModelo(formData: FormData): Promise<UpdateModeloResu
   revalidatePath("/admin");
   revalidatePath("/");
   revalidatePath("/produtos");
+  revalidateStoreCatalogCache();
   return { ok: true };
 }
 
@@ -336,6 +339,7 @@ export async function addModeloAno(
     revalidatePath("/admin/modelos");
     revalidatePath("/");
     revalidatePath("/produtos");
+  revalidateStoreCatalogCache();
     return { ok: true, message: `Ano ${anoIni} adicionado.` };
   }
 
@@ -391,6 +395,7 @@ export async function addModeloAno(
   revalidatePath("/admin/modelos");
   revalidatePath("/");
   revalidatePath("/produtos");
+  revalidateStoreCatalogCache();
 
   const pulados = totalAnos - novos.length;
   const baseMsg = `${novos.length} ano(s) adicionado(s) (${anoIni}–${anoFim})`;
@@ -411,6 +416,7 @@ export async function removeModeloAno(formData: FormData): Promise<void> {
   revalidatePath("/admin/modelos");
   revalidatePath("/");
   revalidatePath("/produtos");
+  revalidateStoreCatalogCache();
 }
 
 export type DeleteModeloResult = { ok: true } | { ok: false; message: string };
@@ -442,8 +448,10 @@ export async function deleteModelo(modeloId: string): Promise<DeleteModeloResult
   revalidatePath("/admin/produtos");
   revalidatePath("/admin/produtos/novo");
   revalidatePath("/produtos");
+  revalidateStoreCatalogCache();
   revalidatePath("/");
   revalidatePath("/admin");
+  revalidateStoreCatalogCache();
   return { ok: true };
 }
 
@@ -484,6 +492,7 @@ export async function deleteModelosEmLote(ids: string[]): Promise<DeleteModelosE
     revalidatePath("/admin/produtos");
     revalidatePath("/admin/produtos/novo");
     revalidatePath("/produtos");
+  revalidateStoreCatalogCache();
     revalidatePath("/");
     revalidatePath("/admin");
   }

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState } from "react";
 
 type ProductPhotoCarouselProps = {
@@ -10,6 +11,15 @@ type ProductPhotoCarouselProps = {
 const photoShellClassName =
   "relative flex aspect-square w-full max-w-[min(100%,22rem)] items-center justify-center rounded-lg border border-store-line/80 bg-white p-3 shadow-sm sm:max-w-[26rem] " +
   "lg:max-h-full lg:max-w-full lg:min-h-0 lg:min-w-0 lg:shadow-none";
+
+function isSupabaseStorageUrl(src: string): boolean {
+  try {
+    const host = new URL(src).hostname;
+    return host.endsWith(".supabase.co") || host === "127.0.0.1" || host === "localhost";
+  } catch {
+    return false;
+  }
+}
 
 function ProductPhotoFallback() {
   return (
@@ -53,8 +63,23 @@ export function ProductPhotoCarousel({ photos, alt }: ProductPhotoCarouselProps)
         </button>
       ) : null}
 
-      {/* eslint-disable-next-line @next/next/no-img-element -- URL pode vir de storage externo sem remotePatterns fixos */}
-      <img src={currentPhoto} alt={alt} className="max-h-full max-w-full object-contain object-center" />
+      {isSupabaseStorageUrl(currentPhoto) ? (
+        <Image
+          src={currentPhoto}
+          alt={alt}
+          fill
+          priority={currentIndex === 0}
+          sizes="(max-width: 1024px) 90vw, 40vw"
+          className="object-contain object-center p-3"
+        />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element -- URL absoluta fora do Storage
+        <img
+          src={currentPhoto}
+          alt={alt}
+          className="max-h-full max-w-full object-contain object-center"
+        />
+      )}
 
       {hasComplementary ? (
         <>
@@ -66,7 +91,7 @@ export function ProductPhotoCarousel({ photos, alt }: ProductPhotoCarouselProps)
           >
             {">"}
           </button>
-          <p className="absolute bottom-2 rounded-full bg-black/70 px-2 py-0.5 text-xs font-medium text-white">
+          <p className="absolute bottom-2 z-10 rounded-full bg-black/70 px-2 py-0.5 text-xs font-medium text-white">
             {currentPositionLabel}
           </p>
         </>

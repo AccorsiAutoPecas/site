@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateStoreCatalogCache } from "@/features/produtos/utils/catalogCacheTags";
 
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { classifyTipoVeiculoModelo } from "@/services/fipe/classifyTipoVeiculoModelo";
@@ -282,6 +283,7 @@ export async function importFipeBrand(input: ImportFipeBrandInput): Promise<Impo
   revalidatePath("/admin");
   revalidatePath("/");
   revalidatePath("/produtos");
+  revalidateStoreCatalogCache();
 
   return {
     ok: true,

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { ProductSummary } from "@/types/product";
 import { ProductAddCartButton } from "@/features/produtos/components/ProductAddCartButton";
@@ -19,6 +20,15 @@ type ProductsGridProps = {
   pixStyle?: "home" | "catalog";
 };
 
+function isSupabaseStorageUrl(src: string): boolean {
+  try {
+    const host = new URL(src).hostname;
+    return host.endsWith(".supabase.co") || host === "127.0.0.1" || host === "localhost";
+  } catch {
+    return false;
+  }
+}
+
 function ProductImage({ src, alt }: { src: string | null; alt: string }) {
   if (!src) {
     return (
@@ -28,14 +38,26 @@ function ProductImage({ src, alt }: { src: string | null; alt: string }) {
     );
   }
 
+  if (!isSupabaseStorageUrl(src)) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- URL absoluta fora do Storage
+      <img
+        src={src}
+        alt={alt}
+        loading="lazy"
+        decoding="async"
+        className="h-full w-full object-contain object-center"
+      />
+    );
+  }
+
   return (
-    // eslint-disable-next-line @next/next/no-img-element -- URLs externas e Storage sem remotePatterns fixos
-    <img
+    <Image
       src={src}
       alt={alt}
-      loading="lazy"
-      decoding="async"
-      className="h-full w-full object-contain object-center"
+      fill
+      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+      className="object-contain object-center"
     />
   );
 }

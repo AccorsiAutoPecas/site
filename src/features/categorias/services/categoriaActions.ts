@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { slugify } from "@/utils/slugify";
 import { createClient } from "@/services/supabase/server";
 import { revalidatePath } from "next/cache";
+import { revalidateStoreCatalogCache } from "@/features/produtos/utils/catalogCacheTags";
 import { redirect } from "next/navigation";
 
 export type CreateCategoriaState = { ok: false; message: string } | null;
@@ -68,6 +69,7 @@ export async function createCategoria(
   revalidatePath("/admin/produtos/novo");
   revalidatePath("/admin");
   revalidatePath("/");
+  revalidateStoreCatalogCache();
   redirect("/admin/categorias?cadastrado=1");
 }
 
@@ -106,6 +108,7 @@ export async function updateCategoria(formData: FormData): Promise<UpdateCategor
   revalidatePath("/admin/produtos/novo");
   revalidatePath("/admin");
   revalidatePath("/");
+  revalidateStoreCatalogCache();
   return { ok: true };
 }
 
@@ -129,5 +132,6 @@ export async function deleteCategoria(categoriaId: string): Promise<DeleteCatego
   revalidatePath("/admin/produtos/novo");
   revalidatePath("/admin");
   revalidatePath("/");
+  revalidateStoreCatalogCache();
   return { ok: true };
 }

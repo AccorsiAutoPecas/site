@@ -1,5 +1,8 @@
-import { createClient } from "@/services/supabase/server";
+import { cache } from "react";
+import { unstable_cache } from "next/cache";
+
 import { fetchProductIdsMatchingSearchTerm } from "@/features/produtos/services/productSearchMatchingIds";
+import { CATALOG_CACHE_TAGS } from "@/features/produtos/utils/catalogCacheTags";
 import type { CatalogFilters } from "@/features/produtos/utils/catalogSearchParams";
 import {
   mapProductSummaryRow,
@@ -7,7 +10,19 @@ import {
   type ProductSummaryRow,
 } from "@/features/produtos/utils/mapProductSummaryRow";
 import { PRODUCT_STATUS_PUBLISHED } from "@/features/produtos/utils/productStatus";
+import { createPublicClient } from "@/services/supabase/public";
+import { createClient } from "@/services/supabase/server";
 import type { ProductSummary } from "@/types/product";
+
+export const CATALOG_PAGE_SIZE = 24;
+
+export type CatalogProductsPage = {
+  produtos: ProductSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
 
 function mapRows(rows: ProductSummaryRow[]): ProductSummary[] {
   return rows.map((row) => mapProductSummaryRow(row));
@@ -17,9 +32,9 @@ function intersect(a: string[], bSet: Set<string>): string[] {
   return a.filter((id) => bSet.has(id));
 }
 
-async function fetchCompatTodosModelosIds(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-): Promise<string[]> {
+type AnySupabase = Awaited<ReturnType<typeof createClient>> | ReturnType<typeof createPublicClient>;
+
+async function fetchCompatTodosModelosIds(supabase: AnySupabase): Promise<string[]> {
   const { data, error } = await supabase
     .from("produtos")
     .select("id")
@@ -29,10 +44,156 @@ async function fetchCompatTodosModelosIds(
   return data.map((r) => r.id as string).filter(Boolean);
 }
 
-/** Teto da faixa de preço (slider), em reais, com valor mínimo útil quando não há produtos. */
-export async function getCatalogSliderMax(): Promise<number> {
+async function resolveCandidateIds(
+  supabase: AnySupabase,
+  filters: CatalogFilters
+): Promise<string[] | undefined | null> {
+  let candidateIds: string[] | undefined;
+
+  if (filters.categoriaIds.length > 0) {
+    const { data, error } = await supabase
+      .from("produto_categorias")
+      .select("produto_id")
+      .in("categoria_id", filters.categoriaIds);
+    if (error || !data?.length) return null;
+    candidateIds = [...new Set(data.map((r) => r.produto_id as string))];
+  }
+
+  if (filters.marcaIds.length > 0) {
+    const { data: modelosRows, error: modErr } = await supabase
+      .from("modelos")
+      .select("id")
+      .in("marca_id", filters.marcaIds);
+    if (modErr || !modelosRows?.length) return null;
+    const modeloIds = modelosRows.map((r) => r.id as string);
+    const { data: compRows, error: compErr } = await supabase
+      .from("produto_compatibilidades")
+      .select("produto_id")
+      .in("modelo_id", modeloIds);
+    if (compErr) return null;
+    const marcaSet = new Set((compRows ?? []).map((r) => r.produto_id as string));
+    const todosModelosIds = await fetchCompatTodosModelosIds(supabase);
+    for (const pid of todosModelosIds) marcaSet.add(pid);
+    if (marcaSet.size === 0) return null;
+    candidateIds = candidateIds ? intersect(candidateIds, marcaSet) : [...marcaSet];
+    if (candidateIds.length === 0) return null;
+  }
+
+  if (filters.modeloId) {
+    let compQuery = supabase
+      .from("produto_compatibilidades")
+      .select("produto_id")
+      .eq("modelo_id", filters.modeloId);
+    if (filters.ano != null) {
+      compQuery = compQuery.lte("ano_inicio", filters.ano).gte("ano_fim", filters.ano);
+    }
+    const { data: compRows, error: compErr } = await compQuery;
+    if (compErr) return null;
+    const modelSet = new Set((compRows ?? []).map((r) => r.produto_id as string));
+    const todosModelosIds = await fetchCompatTodosModelosIds(supabase);
+    for (const pid of todosModelosIds) modelSet.add(pid);
+    if (modelSet.size === 0) return null;
+    candidateIds = candidateIds ? intersect(candidateIds, modelSet) : [...modelSet];
+    if (candidateIds.length === 0) return null;
+  }
+
+  const rawSearch = filters.q?.trim();
+  if (rawSearch) {
+    const searchIds = await fetchProductIdsMatchingSearchTerm(supabase, rawSearch);
+    if (searchIds.length === 0) return null;
+    const searchSet = new Set(searchIds);
+    candidateIds = candidateIds ? intersect(candidateIds, searchSet) : [...searchSet];
+    if (candidateIds.length === 0) return null;
+  }
+
+  return candidateIds;
+}
+
+function emptyPage(page: number, pageSize: number): CatalogProductsPage {
+  return { produtos: [], total: 0, page, pageSize, totalPages: 0 };
+}
+
+async function fetchCatalogProductsPage(
+  filters: CatalogFilters,
+  sliderMax: number,
+  page: number,
+  pageSize: number,
+  usePublicClient: boolean
+): Promise<CatalogProductsPage> {
+  const safePage = Math.max(1, page);
+  const safeSize = Math.max(1, Math.min(pageSize, 100));
+
   try {
-    const supabase = await createClient();
+    const supabase = usePublicClient ? createPublicClient() : await createClient();
+    const candidateIds = await resolveCandidateIds(supabase, filters);
+    if (candidateIds === null) return emptyPage(safePage, safeSize);
+
+    let produtosQuery = supabase
+      .from("produtos")
+      .select(PRODUCT_SUMMARY_SELECT, { count: "exact" })
+      .eq("status", PRODUCT_STATUS_PUBLISHED)
+      .order("titulo");
+    if (candidateIds) produtosQuery = produtosQuery.in("id", candidateIds);
+    if (filters.precoMin != null && filters.precoMin > 0) {
+      produtosQuery = produtosQuery.gte("valor", filters.precoMin);
+    }
+    if (filters.precoMax != null && filters.precoMax < sliderMax) {
+      produtosQuery = produtosQuery.lte("valor", filters.precoMax);
+    }
+
+    const from = (safePage - 1) * safeSize;
+    const to = from + safeSize - 1;
+    const { data, error, count } = await produtosQuery.range(from, to);
+    if (error || !data) return emptyPage(safePage, safeSize);
+
+    const total = count ?? data.length;
+    const totalPages = total > 0 ? Math.ceil(total / safeSize) : 0;
+    return {
+      produtos: mapRows(data as ProductSummaryRow[]),
+      total,
+      page: safePage,
+      pageSize: safeSize,
+      totalPages,
+    };
+  } catch {
+    return emptyPage(safePage, safeSize);
+  }
+}
+
+function filtersCacheKey(filters: CatalogFilters): string {
+  return JSON.stringify({
+    q: filters.q,
+    categoriaIds: [...filters.categoriaIds].sort(),
+    marcaIds: [...filters.marcaIds].sort(),
+    precoMin: filters.precoMin,
+    precoMax: filters.precoMax,
+    modeloId: filters.modeloId,
+    ano: filters.ano,
+  });
+}
+
+/**
+ * Lista produtos do catálogo com filtros e paginação.
+ * Marca usa `marcas` + `modelos` + `produto_compatibilidades` (marca do veículo compatível).
+ */
+export async function getCatalogProducts(
+  filters: CatalogFilters,
+  sliderMax: number,
+  page = 1,
+  pageSize = CATALOG_PAGE_SIZE
+): Promise<CatalogProductsPage> {
+  const key = filtersCacheKey(filters);
+  const cached = unstable_cache(
+    async () => fetchCatalogProductsPage(filters, sliderMax, page, pageSize, true),
+    ["catalog-products", key, String(sliderMax), String(page), String(pageSize)],
+    { tags: [CATALOG_CACHE_TAGS.catalogProducts], revalidate: 60 }
+  );
+  return cached();
+}
+
+async function fetchCatalogSliderMax(): Promise<number> {
+  try {
+    const supabase = createPublicClient();
     const { data, error } = await supabase
       .from("produtos")
       .select("valor")
@@ -49,102 +210,13 @@ export async function getCatalogSliderMax(): Promise<number> {
   }
 }
 
-/**
- * Lista produtos do catálogo com filtros opcionais.
- * Marca usa `marcas` + `modelos` + `produto_compatibilidades` (marca do veículo compatível).
- */
-export async function getCatalogProducts(
-  filters: CatalogFilters,
-  sliderMax: number
-): Promise<ProductSummary[]> {
-  try {
-    const supabase = await createClient();
-    let candidateIds: string[] | undefined;
+const getCachedCatalogSliderMax = unstable_cache(
+  fetchCatalogSliderMax,
+  ["catalog-slider-max"],
+  { tags: [CATALOG_CACHE_TAGS.sliderMax], revalidate: 120 }
+);
 
-    if (filters.categoriaIds.length > 0) {
-      const { data, error } = await supabase
-        .from("produto_categorias")
-        .select("produto_id")
-        .in("categoria_id", filters.categoriaIds);
-      if (error || !data?.length) return [];
-      const set = new Set(data.map((r) => r.produto_id as string));
-      candidateIds = [...set];
-    }
-
-    if (filters.marcaIds.length > 0) {
-      const { data: modelosRows, error: modErr } = await supabase
-        .from("modelos")
-        .select("id")
-        .in("marca_id", filters.marcaIds);
-      if (modErr || !modelosRows?.length) return [];
-      const modeloIds = modelosRows.map((r) => r.id as string);
-      const { data: compRows, error: compErr } = await supabase
-        .from("produto_compatibilidades")
-        .select("produto_id")
-        .in("modelo_id", modeloIds);
-      if (compErr) return [];
-      const marcaSet = new Set((compRows ?? []).map((r) => r.produto_id as string));
-      const todosModelosIds = await fetchCompatTodosModelosIds(supabase);
-      for (const pid of todosModelosIds) marcaSet.add(pid);
-      if (marcaSet.size === 0) return [];
-      if (candidateIds) {
-        candidateIds = intersect(candidateIds, marcaSet);
-        if (candidateIds.length === 0) return [];
-      } else {
-        candidateIds = [...marcaSet];
-      }
-    }
-
-    if (filters.modeloId) {
-      let compQuery = supabase
-        .from("produto_compatibilidades")
-        .select("produto_id")
-        .eq("modelo_id", filters.modeloId);
-      if (filters.ano != null) {
-        compQuery = compQuery.lte("ano_inicio", filters.ano).gte("ano_fim", filters.ano);
-      }
-      const { data: compRows, error: compErr } = await compQuery;
-      if (compErr) return [];
-      const modelSet = new Set((compRows ?? []).map((r) => r.produto_id as string));
-      const todosModelosIds = await fetchCompatTodosModelosIds(supabase);
-      for (const pid of todosModelosIds) modelSet.add(pid);
-      if (modelSet.size === 0) return [];
-      if (candidateIds) {
-        candidateIds = intersect(candidateIds, modelSet);
-        if (candidateIds.length === 0) return [];
-      } else {
-        candidateIds = [...modelSet];
-      }
-    }
-
-    const rawSearch = filters.q?.trim();
-    if (rawSearch) {
-      const searchIds = await fetchProductIdsMatchingSearchTerm(supabase, rawSearch);
-      if (searchIds.length === 0) return [];
-      const searchSet = new Set(searchIds);
-      if (candidateIds) {
-        candidateIds = intersect(candidateIds, searchSet);
-        if (candidateIds.length === 0) return [];
-      } else {
-        candidateIds = [...searchSet];
-      }
-    }
-
-    let produtosQuery = supabase
-      .from("produtos")
-      .select(PRODUCT_SUMMARY_SELECT)
-      .eq("status", PRODUCT_STATUS_PUBLISHED)
-      .order("titulo");
-    if (candidateIds) produtosQuery = produtosQuery.in("id", candidateIds);
-    if (filters.precoMin != null && filters.precoMin > 0) produtosQuery = produtosQuery.gte("valor", filters.precoMin);
-    if (filters.precoMax != null && filters.precoMax < sliderMax) {
-      produtosQuery = produtosQuery.lte("valor", filters.precoMax);
-    }
-
-    const { data, error } = await produtosQuery;
-    if (error || !data) return [];
-    return mapRows(data as ProductSummaryRow[]);
-  } catch {
-    return [];
-  }
-}
+/** Teto da faixa de preço (slider), em reais, com valor mínimo útil quando não há produtos. */
+export const getCatalogSliderMax = cache(async function getCatalogSliderMax(): Promise<number> {
+  return getCachedCatalogSliderMax();
+});

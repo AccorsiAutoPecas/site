@@ -3,13 +3,12 @@ import { Suspense } from "react";
 
 import { AdminDashboardProductSearch } from "@/features/admin/components/AdminDashboardProductSearch";
 import { AdminCatalogTabs } from "@/features/kits/components/AdminCatalogTabs";
-import { ProductDestaqueStarForm } from "@/features/produtos/components/ProductDestaqueStarForm";
-import { ProductRowActions } from "@/features/produtos/components/ProductRowActions";
+import { AdminProdutosListagemTabela } from "@/features/produtos/components/AdminProdutosListagemTabela";
+import { AdminProdutosPagination } from "@/features/produtos/components/AdminProdutosPagination";
 import { ProductCompatReportButton } from "@/features/produtos/components/ProductCompatReportButton";
 import { ProductCreateButton } from "@/features/produtos/components/ProductCreateButton";
-import { ProductStatusBadge } from "@/features/produtos/components/ProductStatusBadge";
+import { ProductWegaImportButton } from "@/features/produtos/components/ProductWegaImportButton";
 import { normalizeProductSearchInput } from "@/features/produtos/services/productSearchMatchingIds";
-import { resolveProductImagePublicUrl } from "@/features/produtos/utils/resolveProductImagePublicUrl";
 import {
   parseProductStatus,
   type ProductStatus,
@@ -21,6 +20,8 @@ const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL
 export const metadata = {
   title: "Produtos | Admin",
 };
+
+const ADMIN_PRODUTOS_PAGE_SIZE = 50;
 
 type ProdutoRow = {
   id: string;
@@ -43,6 +44,11 @@ type StatusFilter = "all" | ProductStatus;
 function parseStatusFilter(raw: string | undefined): StatusFilter {
   if (raw === "draft" || raw === "published") return raw;
   return "all";
+}
+
+function parsePage(raw: string | undefined): number {
+  const n = Number.parseInt(String(raw ?? "").trim(), 10);
+  return Number.isFinite(n) && n >= 1 ? n : 1;
 }
 
 function mergeProdutosById(a: ProdutoRow[], b: ProdutoRow[]): ProdutoRow[] {
@@ -77,10 +83,16 @@ function statusFilterHref(status: StatusFilter, q: string): string {
 export default async function AdminProdutosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string | string[]; status?: string | string[]; erro?: string | string[] }>;
+  searchParams: Promise<{
+    q?: string | string[];
+    status?: string | string[];
+    erro?: string | string[];
+    page?: string | string[];
+  }>;
 }) {
   let produtos: ProdutoRow[] = [];
   let loadError: string | null = null;
+  let listTotal = 0;
 
   const sp = await searchParams;
   const rawQ = typeof sp.q === "string" ? sp.q : Array.isArray(sp.q) ? sp.q[0] : "";
@@ -89,6 +101,9 @@ export default async function AdminProdutosPage({
     typeof sp.status === "string" ? sp.status : Array.isArray(sp.status) ? sp.status[0] : "";
   const statusFilter = parseStatusFilter(rawStatus);
   const rawErro = typeof sp.erro === "string" ? sp.erro : Array.isArray(sp.erro) ? sp.erro[0] : "";
+  const requestedPage = parsePage(
+    typeof sp.page === "string" ? sp.page : Array.isArray(sp.page) ? sp.page[0] : undefined
+  );
 
   let kpiRows: KpiRow[] = [];
 
@@ -108,24 +123,44 @@ export default async function AdminProdutosPage({
       return query.eq("status", statusFilter);
     };
 
-    if (!searchTerm) {
-      let query = supabase.from("produtos").select(PRODUTO_LIST_SELECT).order("titulo");
-      query = applyStatus(query);
-      const { data, error } = await query;
+    let kpiQuery = supabase.from("produtos").select("valor, quantidade_estoque");
+    kpiQuery = applyStatus(kpiQuery);
 
-      if (error) {
-        loadError = error.message;
-      } else if (data) {
-        produtos = mapProdutoRows(data);
-        kpiRows = produtos.map((p) => ({
-          valor: Number(p.valor ?? 0),
-          quantidade_estoque: Number(p.quantidade_estoque),
-        }));
+    if (!searchTerm) {
+      let countQuery = supabase
+        .from("produtos")
+        .select("id", { count: "exact", head: true });
+      countQuery = applyStatus(countQuery);
+
+      const countResEarly = await countQuery;
+      if (countResEarly.error) {
+        loadError = countResEarly.error.message;
+      } else {
+        listTotal = countResEarly.count ?? 0;
+        const totalPagesEarly = listTotal > 0 ? Math.ceil(listTotal / ADMIN_PRODUTOS_PAGE_SIZE) : 0;
+        const safePage =
+          totalPagesEarly > 0 && requestedPage > totalPagesEarly ? totalPagesEarly : requestedPage;
+        const from = (safePage - 1) * ADMIN_PRODUTOS_PAGE_SIZE;
+        const to = from + ADMIN_PRODUTOS_PAGE_SIZE - 1;
+        let listQuery = supabase
+          .from("produtos")
+          .select(PRODUTO_LIST_SELECT)
+          .order("titulo")
+          .range(from, to);
+        listQuery = applyStatus(listQuery);
+
+        const [kpiRes, listRes] = await Promise.all([kpiQuery, listQuery]);
+
+        const err = kpiRes.error?.message ?? listRes.error?.message ?? null;
+        if (err) {
+          loadError = err;
+        } else {
+          kpiRows = (kpiRes.data ?? []) as KpiRow[];
+          produtos = mapProdutoRows(listRes.data ?? []);
+        }
       }
     } else {
       const pattern = `%${searchTerm}%`;
-      let kpiQuery = supabase.from("produtos").select("valor, quantidade_estoque");
-      kpiQuery = applyStatus(kpiQuery);
       let tituloQuery = supabase.from("produtos").select(PRODUTO_LIST_SELECT).ilike("titulo", pattern);
       tituloQuery = applyStatus(tituloQuery);
       let codQuery = supabase.from("produtos").select(PRODUTO_LIST_SELECT).ilike("cod_produto", pattern);
@@ -139,10 +174,16 @@ export default async function AdminProdutosPage({
         loadError = err;
       } else {
         kpiRows = (kpiRes.data ?? []) as KpiRow[];
-        produtos = mergeProdutosById(
+        const merged = mergeProdutosById(
           mapProdutoRows(tituloRes.data ?? []),
           mapProdutoRows(codRes.data ?? [])
         );
+        listTotal = merged.length;
+        const totalPagesSearch = listTotal > 0 ? Math.ceil(listTotal / ADMIN_PRODUTOS_PAGE_SIZE) : 0;
+        const safePage =
+          totalPagesSearch > 0 && requestedPage > totalPagesSearch ? totalPagesSearch : requestedPage;
+        const from = (safePage - 1) * ADMIN_PRODUTOS_PAGE_SIZE;
+        produtos = merged.slice(from, from + ADMIN_PRODUTOS_PAGE_SIZE);
       }
     }
   } catch (e) {
@@ -150,6 +191,8 @@ export default async function AdminProdutosPage({
   }
 
   const { n, totalItens, valorEstoque, esgotados, ultimaUnidade } = computeKpiStats(kpiRows);
+  const totalPages = listTotal > 0 ? Math.ceil(listTotal / ADMIN_PRODUTOS_PAGE_SIZE) : 0;
+  const page = totalPages > 0 && requestedPage > totalPages ? totalPages : requestedPage;
 
   const filterChips: { key: StatusFilter; label: string }[] = [
     { key: "all", label: "Todos" },
@@ -202,7 +245,7 @@ export default async function AdminProdutosPage({
             <h2 className="text-base font-semibold text-gray-900">Lista de produtos</h2>
             <p className="mt-0.5 text-sm text-gray-500">
               {searchTerm
-                ? `Filtrando por nome ou código · ${produtos.length} resultado${produtos.length === 1 ? "" : "s"}`
+                ? `Filtrando por nome ou código · ${listTotal} resultado${listTotal === 1 ? "" : "s"}`
                 : "Pesquise, edite e gerencie o catálogo"}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -236,6 +279,7 @@ export default async function AdminProdutosPage({
               <AdminDashboardProductSearch />
             </Suspense>
             <div className="flex flex-wrap items-stretch gap-2 lg:items-center">
+              <ProductWegaImportButton />
               <ProductCompatReportButton />
               <ProductCreateButton />
             </div>
@@ -265,80 +309,17 @@ export default async function AdminProdutosPage({
               : "Nenhum produto cadastrado ainda."}
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50/80 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  <th className="w-14 px-2 py-3 text-center text-amber-500" scope="col">
-                    <span className="sr-only">Destaque na home</span>
-                    <span aria-hidden>★</span>
-                  </th>
-                  <th className="w-16 px-3 py-3" scope="col">
-                    <span className="sr-only">Foto</span>
-                  </th>
-                  <th className="px-6 py-3">Produto</th>
-                  <th className="px-6 py-3">Código</th>
-                  <th className="px-6 py-3 text-right">Valor</th>
-                  <th className="px-6 py-3 text-right">Estoque</th>
-                  <th className="px-6 py-3 text-center">Status</th>
-                  <th className="px-6 py-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {produtos.map((p) => {
-                    const fotoSrc = resolveProductImagePublicUrl(p.foto);
-                    const estoque = Number(p.quantidade_estoque);
-                    return (
-                    <tr key={p.id} className="text-gray-900 transition hover:bg-gray-50/80">
-                      <td className="px-2 py-4">
-                        <ProductDestaqueStarForm productId={p.id} emDestaque={p.em_destaque} />
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md border border-gray-200 bg-white">
-                          {fotoSrc ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={fotoSrc}
-                              alt=""
-                              className="h-full w-full object-contain"
-                            />
-                          ) : (
-                            <span className="text-[10px] text-gray-400">Sem foto</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 font-medium">{p.titulo?.trim() || "Sem título"}</td>
-                      <td className="px-6 py-4 font-mono text-xs text-gray-600">
-                        {p.cod_produto?.trim() || "—"}
-                      </td>
-                      <td className="px-6 py-4 text-right tabular-nums text-gray-800">
-                        {p.valor != null && Number.isFinite(Number(p.valor))
-                          ? money.format(Number(p.valor))
-                          : "—"}
-                      </td>
-                      <td
-                        className={`px-6 py-4 text-right tabular-nums ${
-                          estoque <= 0
-                            ? "font-semibold text-red-700"
-                            : estoque === 1
-                              ? "font-semibold text-amber-800"
-                              : "text-gray-800"
-                        }`}
-                      >
-                        {estoque}
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <ProductStatusBadge status={p.status} />
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <ProductRowActions productId={p.id} />
-                      </td>
-                    </tr>
-                    );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <AdminProdutosListagemTabela produtos={produtos} />
+            <AdminProdutosPagination
+              page={page}
+              totalPages={totalPages}
+              total={listTotal}
+              pageSize={ADMIN_PRODUTOS_PAGE_SIZE}
+              q={searchTerm ?? ""}
+              status={statusFilter}
+            />
+          </>
         )}
       </section>
     </div>

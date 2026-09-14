@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { slugify } from "@/utils/slugify";
 import { createClient } from "@/services/supabase/server";
 import { revalidatePath } from "next/cache";
+import { revalidateStoreCatalogCache } from "@/features/produtos/utils/catalogCacheTags";
 import { redirect } from "next/navigation";
 
 export type CreateMarcaState = { ok: false; message: string } | null;
@@ -65,6 +66,7 @@ export async function createMarca(
   revalidatePath("/admin/modelos");
   revalidatePath("/admin/produtos/novo");
   revalidatePath("/admin");
+  revalidateStoreCatalogCache();
   redirect("/admin/marcas-e-modelos?cadastrado=marca");
 }
 
@@ -103,6 +105,7 @@ export async function updateMarca(formData: FormData): Promise<UpdateMarcaResult
   revalidatePath("/admin/modelos");
   revalidatePath("/admin/produtos/novo");
   revalidatePath("/admin");
+  revalidateStoreCatalogCache();
   return { ok: true };
 }
 
@@ -134,5 +137,6 @@ export async function deleteMarca(marcaId: string): Promise<DeleteMarcaResult> {
   revalidatePath("/admin/modelos");
   revalidatePath("/admin/produtos/novo");
   revalidatePath("/admin");
+  revalidateStoreCatalogCache();
   return { ok: true };
 }

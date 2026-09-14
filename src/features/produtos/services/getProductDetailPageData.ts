@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { createClient } from "@/services/supabase/server";
 import { resolveProductImagePublicUrl } from "@/features/produtos/utils/resolveProductImagePublicUrl";
 import {
@@ -111,7 +113,9 @@ async function fetchSummariesSorted(
   return (data as ProductSummaryRow[]).map((row) => toSummary(row));
 }
 
-export async function getProductDetailPageData(productId: string): Promise<ProductDetailPageData> {
+export const getProductDetailPageData = cache(async function getProductDetailPageData(
+  productId: string
+): Promise<ProductDetailPageData> {
   try {
     const supabase = await createClient();
 
@@ -257,4 +261,4 @@ export async function getProductDetailPageData(productId: string): Promise<Produ
   } catch {
     return { produto: null, relacionados: [] };
   }
-}
+});

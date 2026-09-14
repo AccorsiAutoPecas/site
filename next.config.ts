@@ -2,6 +2,26 @@ import type { NextConfig } from "next";
 
 const isDev = process.env.NODE_ENV !== "production";
 
+function supabaseImageRemotePatterns(): NonNullable<NextConfig["images"]>["remotePatterns"] {
+  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!raw) {
+    return [{ protocol: "https", hostname: "*.supabase.co", pathname: "/storage/v1/object/public/**" }];
+  }
+  try {
+    const { protocol, hostname, port } = new URL(raw);
+    return [
+      {
+        protocol: protocol.replace(":", "") as "http" | "https",
+        hostname,
+        ...(port ? { port } : {}),
+        pathname: "/storage/v1/object/public/**",
+      },
+    ];
+  } catch {
+    return [{ protocol: "https", hostname: "*.supabase.co", pathname: "/storage/v1/object/public/**" }];
+  }
+}
+
 /**
  * Baseline CSP — tighten over time (nonces/hashes for scripts, narrow img-src/connect-src).
  * Dev allows eval + local ws/http for Next.js HMR.
@@ -51,6 +71,9 @@ if (!isDev) {
 }
 
 const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: supabaseImageRemotePatterns(),
+  },
   async headers() {
     return [
       {

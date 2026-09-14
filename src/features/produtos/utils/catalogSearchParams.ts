@@ -83,7 +83,22 @@ export function parseCatalogSearchParams(
   };
 }
 
-export function buildCatalogQueryString(filters: CatalogFilters, sliderMax: number): string {
+/** Página do catálogo (`?page=`), 1-based. */
+export function parseCatalogPage(sp: Record<string, string | string[] | undefined>): number {
+  const raw = typeof sp.page === "string" ? sp.page : Array.isArray(sp.page) ? sp.page[0] : undefined;
+  const n = Number.parseInt(String(raw ?? "").trim(), 10);
+  return Number.isFinite(n) && n >= 1 ? n : 1;
+}
+
+/**
+ * Monta a query do catálogo.
+ * `page` > 1 é incluído; filtros novos sempre voltam à página 1 (não passe page ao trocar filtro).
+ */
+export function buildCatalogQueryString(
+  filters: CatalogFilters,
+  sliderMax: number,
+  page = 1
+): string {
   const p = new URLSearchParams();
   if (filters.q?.trim()) p.set("q", filters.q.trim());
   if (filters.categoriaIds.length) p.set("categorias", filters.categoriaIds.join(","));
@@ -97,8 +112,14 @@ export function buildCatalogQueryString(filters: CatalogFilters, sliderMax: numb
   }
   if (filters.modeloId) p.set("modelo", filters.modeloId);
   if (filters.ano != null) p.set("ano", String(filters.ano));
+  if (page > 1) p.set("page", String(page));
   const s = p.toString();
   return s ? `?${s}` : "";
+}
+
+/** Query string sem `?` (para paginação / links). */
+export function catalogFiltersToSearchParams(filters: CatalogFilters, sliderMax: number): string {
+  return buildCatalogQueryString(filters, sliderMax).replace(/^\?/, "");
 }
 
 export function catalogFiltersActive(filters: CatalogFilters, sliderMax: number): boolean {

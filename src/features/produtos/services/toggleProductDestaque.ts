@@ -3,6 +3,7 @@
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { createClient } from "@/services/supabase/server";
 import { revalidatePath } from "next/cache";
+import { revalidateStoreCatalogCache } from "@/features/produtos/utils/catalogCacheTags";
 
 /** Alterna destaque a partir da listagem do painel (estrela). */
 export async function toggleProductDestaque(formData: FormData): Promise<void> {
@@ -21,4 +22,6 @@ export async function toggleProductDestaque(formData: FormData): Promise<void> {
 
   revalidatePath("/admin");
   revalidatePath("/");
+  revalidatePath("/produtos");
+  revalidateStoreCatalogCache();
 }

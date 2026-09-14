@@ -14,9 +14,6 @@ import type { CategoryListItem } from "@/types/category";
 import type { KitSummary } from "@/types/kit";
 import type { ProductSummary } from "@/types/product";
 
-/** Catálogo marcas/modelos (incl. camionete) deve refletir cadastro no Supabase sem cache de página. */
-export const dynamic = "force-dynamic";
-
 export default async function Home({
   searchParams,
 }: {
@@ -34,7 +31,7 @@ export default async function Home({
   const [cats, prods, vehicleFilterData, kitsData] = await Promise.all([
     getHomeCategories(),
     getHomeProducts({ q: searchQ, modeloId, anoVeiculo }),
-    getVehicleFilterCatalogData(),
+    getVehicleFilterCatalogData({ modeloIdForAnos: modeloId }),
     searchQ ? searchPublishedKits(searchQ) : getHomeKits(),
   ]);
   categorias = cats;

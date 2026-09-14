@@ -5,6 +5,7 @@ import { PRODUCT_STATUS_PUBLISHED } from "@/features/produtos/utils/productStatu
 import { validateProductForPublish } from "@/features/produtos/utils/validateProductForPublish";
 import { createClient } from "@/services/supabase/server";
 import { revalidatePath } from "next/cache";
+import { revalidateStoreCatalogCache } from "@/features/produtos/utils/catalogCacheTags";
 
 export type PublishProductState =
   | { ok: true; message: string }
@@ -56,6 +57,7 @@ export async function publishProduct(productId: string): Promise<PublishProductS
   revalidatePath(`/produtos/${id}`);
   revalidatePath("/admin/produtos");
   revalidatePath(`/admin/produtos/${id}/edit`);
+  revalidateStoreCatalogCache();
 
   return { ok: true, message: "Produto publicado com sucesso." };
 }

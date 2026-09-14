@@ -10,6 +10,7 @@ import type {
   VehicleFilterMarca,
   VehicleFilterModelo,
 } from "@/features/compatibilidade/services/getVehicleFilterCatalogData";
+import { getModeloAnos } from "@/features/compatibilidade/services/getModeloAnos";
 import { storeShellContent, storeShellInset } from "@/config/storeShell";
 import { PlateVehicleFinder } from "@/features/compatibilidade/components/PlateVehicleFinder";
 
@@ -266,6 +267,8 @@ export function VehicleFilter({
   const [ano, setAno] = useState("");
   /** Mobile: painel de marca/modelo/ano só após toque no tipo de veículo. */
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [anosCache, setAnosCache] = useState<VehicleFilterAnosByModelo>(() => anosByModeloId);
+  const anosRequestedRef = useRef<Set<string>>(new Set(Object.keys(anosByModeloId)));
 
   const replaceVehicleQuery = (mutate: (p: URLSearchParams) => void) => {
     const p = new URLSearchParams(sp.toString());
@@ -305,6 +308,30 @@ export function VehicleFilter({
   }, [appliedModeloId, appliedAno, appliedModel]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  useEffect(() => {
+    setAnosCache((prev) => ({ ...anosByModeloId, ...prev }));
+    for (const id of Object.keys(anosByModeloId)) {
+      anosRequestedRef.current.add(id);
+    }
+  }, [anosByModeloId]);
+
+  useEffect(() => {
+    const id = modeloId.trim();
+    if (!id || anosRequestedRef.current.has(id)) return;
+    anosRequestedRef.current.add(id);
+    let cancelled = false;
+    void getModeloAnos(id).then((anos) => {
+      if (cancelled) {
+        anosRequestedRef.current.delete(id);
+        return;
+      }
+      setAnosCache((prev) => ({ ...prev, [id]: anos }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [modeloId]);
+
   const tipoAtual = TAB_TO_TIPO[category];
 
   const marcasFiltradas = useMemo(() => {
@@ -319,7 +346,7 @@ export function VehicleFilter({
       .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   }, [modelos, tipoAtual, marcaId]);
 
-  const anosDisponiveis = modeloId ? anosByModeloId[modeloId] ?? [] : [];
+  const anosDisponiveis = modeloId ? anosCache[modeloId] ?? [] : [];
 
   const activeTabIndex = tabIndex(category);
   const canSearch = Boolean(modeloId.trim());

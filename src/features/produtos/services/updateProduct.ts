@@ -20,6 +20,7 @@ import { parseProductPhotoGalleryFromForm } from "@/features/produtos/services/p
 import { createClient } from "@/services/supabase/server";
 import { removeProductImageFromStorage } from "@/services/storage/removeProductImage";
 import { revalidatePath } from "next/cache";
+import { revalidateStoreCatalogCache } from "@/features/produtos/utils/catalogCacheTags";
 
 export type UpdateProductState =
   | { ok: true; message: string }
@@ -278,5 +279,6 @@ export async function updateProduct(
   revalidatePath("/admin/produtos");
   revalidatePath(`/admin/produtos/${id}/edit`);
   revalidatePath(`/produtos/${id}`);
+  revalidateStoreCatalogCache();
   return { ok: true, message: "Produto atualizado com sucesso." };
 }

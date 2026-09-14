@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type { VehicleFilterAnosByModelo, VehicleFilterModelo } from "@/features/compatibilidade/services/getVehicleFilterCatalogData";
+import { getModeloAnos } from "@/features/compatibilidade/services/getModeloAnos";
 import type { StoreMarcaOption } from "@/features/marcas/services/getStoreMarcas";
 import {
   buildCatalogQueryString,
@@ -60,6 +61,8 @@ export function ProductCatalogFilters({
   const [marcaOpen, setMarcaOpen] = useState(true);
   const [veiculoOpen, setVeiculoOpen] = useState(true);
   const [vehicleMarcaId, setVehicleMarcaId] = useState("");
+  const [anosCache, setAnosCache] = useState<VehicleFilterAnosByModelo>(() => anosByModeloId);
+  const anosRequestedRef = useRef<Set<string>>(new Set(Object.keys(anosByModeloId)));
 
   useEffect(() => {
     const f = parseCatalogSearchParamsFromUrlSearchParams(sp);
@@ -72,6 +75,32 @@ export function ProductCatalogFilters({
       setVehicleMarcaId("");
     }
   }, [sp, sliderMax, modelosVeiculo]);
+
+  useEffect(() => {
+    setAnosCache((prev) => ({ ...anosByModeloId, ...prev }));
+    for (const id of Object.keys(anosByModeloId)) {
+      anosRequestedRef.current.add(id);
+    }
+  }, [anosByModeloId]);
+
+  const f = parseCatalogSearchParamsFromUrlSearchParams(sp);
+
+  useEffect(() => {
+    const id = f.modeloId?.trim() ?? "";
+    if (!id || anosRequestedRef.current.has(id)) return;
+    anosRequestedRef.current.add(id);
+    let cancelled = false;
+    void getModeloAnos(id).then((anos) => {
+      if (cancelled) {
+        anosRequestedRef.current.delete(id);
+        return;
+      }
+      setAnosCache((prev) => ({ ...prev, [id]: anos }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [f.modeloId]);
 
   const replaceFilters = (next: CatalogFilters) => {
     const qs = buildCatalogQueryString(next, sliderMax);
@@ -104,11 +133,10 @@ export function ProductCatalogFilters({
   };
 
   const limparVeiculo = () => {
-    const f = parseCatalogSearchParamsFromUrlSearchParams(sp);
-    replaceFilters({ ...f, modeloId: null, ano: null });
+    const cur = parseCatalogSearchParamsFromUrlSearchParams(sp);
+    replaceFilters({ ...cur, modeloId: null, ano: null });
   };
 
-  const f = parseCatalogSearchParamsFromUrlSearchParams(sp);
   const modelosVeiculoFiltrados = useMemo(
     () =>
       modelosVeiculo
@@ -117,7 +145,7 @@ export function ProductCatalogFilters({
         .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
     [modelosVeiculo, vehicleMarcaId]
   );
-  const anosModeloSelecionado = f.modeloId ? anosByModeloId[f.modeloId] ?? [] : [];
+  const anosModeloSelecionado = f.modeloId ? anosCache[f.modeloId] ?? [] : [];
   const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
   const checkClass =
