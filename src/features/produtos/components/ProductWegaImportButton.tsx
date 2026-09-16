@@ -3,6 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { LoadingDots } from "@/features/produtos/components/LoadingDots";
+import { formatAnoRangeLabel } from "@/features/produtos/utils/wegaText";
+
 type SuggestedModelo = {
   key: string;
   montadora: string;
@@ -19,6 +22,7 @@ type ImportOk = {
   dryRun: boolean;
   totalRows: number;
   created: number;
+  updated: number;
   skipped: number;
   compatLinks: number;
   unmatchedCompat: Array<{
@@ -45,11 +49,19 @@ type RegisterOk = {
   errors: string[];
 };
 
+function confirmLabel(created: number, updated: number): string {
+  const parts: string[] = [];
+  if (created > 0) parts.push(`${created} produto(s)`);
+  if (updated > 0) parts.push(`${updated} atualização(ões)`);
+  return parts.length > 0 ? `Confirmar ${parts.join(" e ")}` : "Nada a confirmar";
+}
+
 export function ProductWegaImportButton() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const pendingFile = useRef<File | null>(null);
   const [pending, setPending] = useState(false);
+  const [pendingLabel, setPendingLabel] = useState("Processando");
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ImportOk | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -88,6 +100,7 @@ export function ProductWegaImportButton() {
     }
     return {
       ...json,
+      updated: typeof json.updated === "number" ? json.updated : 0,
       suggestedModelos: Array.isArray(json.suggestedModelos) ? json.suggestedModelos : [],
     };
   }
@@ -96,6 +109,7 @@ export function ProductWegaImportButton() {
     const file = fileList?.[0];
     if (!file) return;
     setPending(true);
+    setPendingLabel("Lendo planilha");
     setError(null);
     setPreview(null);
     setRegisterNote(null);
@@ -120,6 +134,7 @@ export function ProductWegaImportButton() {
       return;
     }
     setPending(true);
+    setPendingLabel("Importando planilha");
     setError(null);
     try {
       const result = await postFile(file, false);
@@ -139,6 +154,7 @@ export function ProductWegaImportButton() {
       return;
     }
     setPending(true);
+    setPendingLabel("Cadastrando modelos");
     setError(null);
     setRegisterNote(null);
     try {
@@ -210,11 +226,34 @@ export function ProductWegaImportButton() {
         disabled={pending}
         onClick={() => inputRef.current?.click()}
         title="Importar planilha Kits WEGA (1 linha = 1 produto em cadastro)"
-        className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {pending ? "Processando…" : "Importar Excel WEGA"}
+        {pending && !preview ? (
+          <LoadingDots label={pendingLabel} size="sm" />
+        ) : (
+          "Importar Excel WEGA"
+        )}
       </button>
       {error ? <p className="max-w-xs text-right text-xs text-red-600">{error}</p> : null}
+
+      {pending ? (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-4"
+          role="alertdialog"
+          aria-busy="true"
+          aria-labelledby="wega-loading-title"
+        >
+          <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-xl bg-white px-6 py-8 shadow-xl">
+            <p id="wega-loading-title" className="text-center text-base font-semibold text-gray-900">
+              {pendingLabel}
+            </p>
+            <LoadingDots label="" className="justify-center" />
+            <p className="text-center text-xs text-gray-500">
+              Aguarde — isso pode levar alguns segundos.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {preview ? (
         <div
@@ -232,7 +271,13 @@ export function ProductWegaImportButton() {
               <li>
                 {preview.dryRun ? "Serão criados" : "Criados"}: {preview.created}
               </li>
-              <li>Pulados (título já existe): {preview.skipped}</li>
+              <li>
+                {preview.dryRun ? "Serão atualizados" : "Atualizados"}: {preview.updated}
+              </li>
+              <li>Sem alteração: {preview.skipped}</li>
+              <li className="text-xs text-gray-500">
+                Fotos, estoque e valores já preenchidos não são alterados.
+              </li>
               <li>Vínculos de compatibilidade: {preview.compatLinks}</li>
               <li>Sem match de modelo: {preview.unmatchedCompat.length}</li>
             </ul>
@@ -277,7 +322,7 @@ export function ProductWegaImportButton() {
                         </span>
                         <span className="text-amber-800/90">
                           {" "}
-                          · {s.anoInicio}–{s.anoFim}
+                          · {formatAnoRangeLabel(s.anoInicio, s.anoFim)}
                           {s.needsMarca ? " · (cria marca)" : ""}
                         </span>
                       </span>
@@ -333,9 +378,19 @@ export function ProductWegaImportButton() {
             ) : null}
 
             {preview.warnings.length > 0 ? (
-              <p className="mt-2 text-xs text-gray-500">
-                Avisos do parser: {preview.warnings.length}
-              </p>
+              <div className="mt-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Avisos ({preview.warnings.length})
+                </p>
+                <ul className="mt-1 max-h-28 overflow-y-auto text-xs text-gray-600">
+                  {preview.warnings.slice(0, 20).map((warning, index) => (
+                    <li key={`${index}-${warning}`}>{warning}</li>
+                  ))}
+                  {preview.warnings.length > 20 ? (
+                    <li>… e mais {preview.warnings.length - 20}</li>
+                  ) : null}
+                </ul>
+              </div>
             ) : null}
 
             {preview.errors.length > 0 ? (
@@ -355,13 +410,13 @@ export function ProductWegaImportButton() {
                   </button>
                   <button
                     type="button"
-                    disabled={pending || preview.created === 0}
+                    disabled={pending || (preview.created === 0 && preview.updated === 0)}
                     onClick={() => {
                       void confirmImport();
                     }}
                     className="rounded-lg bg-admin-accent px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
                   >
-                    {pending ? "Importando…" : `Confirmar ${preview.created} produtos`}
+                    {pending ? "Importando…" : confirmLabel(preview.created, preview.updated)}
                   </button>
                 </>
               ) : (

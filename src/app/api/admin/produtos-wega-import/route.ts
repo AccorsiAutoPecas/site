@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 const MAX_BYTES = 15 * 1024 * 1024;
 
 /**
- * Admin: import WEGA kits Excel (1 row = 1 draft product + compat matches).
+ * Admin: import or fill blank fields from a WEGA kits Excel.
  * multipart: file (.xlsx), dryRun ("1" | "0", default "1")
  */
 export async function POST(request: Request) {

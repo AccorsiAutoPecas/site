@@ -56,14 +56,24 @@ export function ProductPublishActions({
       <div className="flex flex-wrap items-center gap-3">
         <ProductStatusBadge status={status} />
         {status === "draft" ? (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={runPublish}
-            className="inline-flex items-center justify-center rounded-lg bg-admin-accent px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1857d1] disabled:opacity-60"
-          >
-            {pending ? "Publicando…" : "Publicar Produto"}
-          </button>
+          <>
+            <a
+              href={`/produtos/${productId}/preview`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 shadow-sm transition hover:bg-gray-50"
+            >
+              Prévia no site
+            </a>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={runPublish}
+              className="inline-flex items-center justify-center rounded-lg bg-admin-accent px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1857d1] disabled:opacity-60"
+            >
+              {pending ? "Publicando…" : "Publicar Produto"}
+            </button>
+          </>
         ) : (
           <button
             type="button"
@@ -77,7 +87,7 @@ export function ProductPublishActions({
       </div>
       {status === "draft" && (
         <p className="text-xs text-gray-500">
-          Salve as alterações do formulário antes de publicar. A validação usa os dados já gravados.
+          Salve as alterações do formulário antes de publicar ou abrir a prévia. Os dois usam os dados já gravados.
         </p>
       )}
 

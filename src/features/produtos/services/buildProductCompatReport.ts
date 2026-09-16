@@ -5,6 +5,7 @@ import {
   TIPO_VEICULO_MODELO_LABELS,
 } from "@/features/compatibilidade/constants/tipoVeiculoModelo";
 import { parseProductStatus, productStatusLabel } from "@/features/produtos/utils/productStatus";
+import { formatAnoRangeLabel } from "@/features/produtos/utils/wegaText";
 import {
   buildSimpleXlsx,
   XLSX_CONTENT_TYPE,
@@ -216,9 +217,7 @@ export async function buildProductCompatReport(
   for (const row of compatRows) {
     const anos =
       Number.isFinite(row.anoInicio) && Number.isFinite(row.anoFim)
-        ? row.anoInicio === row.anoFim
-          ? String(row.anoInicio)
-          : `${row.anoInicio}-${row.anoFim}`
+        ? formatAnoRangeLabel(row.anoInicio, row.anoFim)
         : "";
     const label = [row.marca, row.modelo, anos].filter(Boolean).join(" ").trim();
     if (!label) continue;

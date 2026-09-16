@@ -8,6 +8,7 @@ import {
   type ProductSummaryRow,
 } from "@/features/produtos/utils/mapProductSummaryRow";
 import { PRODUCT_STATUS_PUBLISHED } from "@/features/produtos/utils/productStatus";
+import { formatAnoRangeLabel } from "@/features/produtos/utils/wegaText";
 import type { ProductSummary } from "@/types/product";
 
 type ProductDetail = ProductSummary & {
@@ -64,7 +65,7 @@ function compatibilityLabelFromRow(raw: unknown): string | null {
   const ai = Number(row.ano_inicio);
   const af = Number(row.ano_fim);
   if (Number.isFinite(ai) && Number.isFinite(af)) {
-    return ai === af ? `${base} ${ai}` : `${base} ${ai}-${af}`;
+    return `${base} ${formatAnoRangeLabel(ai, af)}`;
   }
   if (Number.isFinite(ai)) return `${base} a partir de ${ai}`;
   if (Number.isFinite(af)) return `${base} até ${af}`;
@@ -114,19 +115,23 @@ async function fetchSummariesSorted(
 }
 
 export const getProductDetailPageData = cache(async function getProductDetailPageData(
-  productId: string
+  productId: string,
+  includeUnpublished = false,
 ): Promise<ProductDetailPageData> {
   try {
     const supabase = await createClient();
 
-    const { data: produtoData, error: produtoError } = await supabase
+    let produtoQuery = supabase
       .from("produtos")
       .select(
         `id, titulo, cod_produto, valor, foto, quantidade_estoque, descricao, desconto_pix_percent, desconto_cartao_percent, somente_retirada_loja, compat_todos_modelos`,
       )
-      .eq("id", productId)
-      .eq("status", PRODUCT_STATUS_PUBLISHED)
-      .maybeSingle();
+      .eq("id", productId);
+    if (!includeUnpublished) {
+      produtoQuery = produtoQuery.eq("status", PRODUCT_STATUS_PUBLISHED);
+    }
+
+    const { data: produtoData, error: produtoError } = await produtoQuery.maybeSingle();
 
     if (produtoError || !produtoData) {
       return { produto: null, relacionados: [] };

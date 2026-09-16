@@ -85,7 +85,16 @@ export type ParsedAnoRange = {
   openEnded: boolean;
 };
 
-const OPEN_END_YEAR = 2099;
+/** Sentinel stored when the spreadsheet year range is open-ended. Not a real model year. */
+export const OPEN_END_YEAR = 2099;
+
+/** Display label for a stored year range. `2099` stays in the database and reads as "em diante". */
+export function formatAnoRangeLabel(anoInicio: number, anoFim: number): string {
+  if (!Number.isFinite(anoInicio) || !Number.isFinite(anoFim)) return "";
+  if (anoFim === OPEN_END_YEAR) return `${anoInicio} em diante`;
+  if (anoInicio === anoFim) return String(anoInicio);
+  return `${anoInicio}-${anoFim}`;
+}
 
 /**
  * Accepts `2010 -- 2012`, `2010 - 2012`, `2023 -->`, `2023→`.

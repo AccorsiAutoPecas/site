@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { revalidatePath } from "next/cache";
 
 import {
   findMarcaId,
@@ -11,6 +12,7 @@ import {
   type WegaModeloSuggestion,
 } from "@/features/produtos/utils/buildWegaModeloSuggestions";
 import { PRODUCT_STATUS_DRAFT } from "@/features/produtos/utils/productStatus";
+import { revalidateStoreCatalogCache } from "@/features/produtos/utils/catalogCacheTags";
 import { normalizeWegaText } from "@/features/produtos/utils/wegaText";
 import {
   parseWegaKitsWorkbook,
@@ -30,6 +32,8 @@ export type WegaImportResult = {
   dryRun: boolean;
   totalRows: number;
   created: number;
+  /** Produtos já existentes que receberam preço, dimensões ou categoria em campo vazio. */
+  updated: number;
   skipped: number;
   compatLinks: number;
   unmatchedCompat: WegaImportUnmatched[];
@@ -45,27 +49,107 @@ export type WegaImportFailure = { ok: false; message: string };
 
 const PAGE = 1000;
 
-async function fetchAllTitulosDraftish(
-  supabase: SupabaseClient,
-): Promise<{ titles: Set<string>; error: string | null }> {
-  const titles = new Set<string>();
+type ExistingProduct = {
+  id: string;
+  valor: number | null;
+  prod_comprimento_cm: number | null;
+  prod_largura_cm: number | null;
+  prod_altura_cm: number | null;
+  prod_peso_kg: number | null;
+  hasCategoria: boolean;
+};
+
+type ProductBlankPatch = {
+  valor?: number;
+  prod_comprimento_cm?: number;
+  prod_largura_cm?: number;
+  prod_altura_cm?: number;
+  prod_peso_kg?: number;
+};
+
+function toNumberOrNull(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = typeof value === "number" ? value : Number(String(value).replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
+
+async function fetchExistingByTitle(supabase: SupabaseClient): Promise<
+  | { ok: true; byTitle: Map<string, ExistingProduct> }
+  | { ok: false; message: string }
+> {
+  const byTitle = new Map<string, ExistingProduct>();
   let from = 0;
   for (;;) {
     const { data, error } = await supabase
       .from("produtos")
-      .select("titulo")
+      .select("id, titulo, valor, prod_comprimento_cm, prod_largura_cm, prod_altura_cm, prod_peso_kg")
       .not("titulo", "is", null)
       .range(from, from + PAGE - 1);
-    if (error) return { titles, error: error.message };
+    if (error) return { ok: false, message: error.message };
     const rows = data ?? [];
     for (const row of rows) {
-      const t = typeof row.titulo === "string" ? row.titulo.trim() : "";
-      if (t) titles.add(t);
+      const titulo = typeof row.titulo === "string" ? row.titulo.trim() : "";
+      const id = typeof row.id === "string" ? row.id : "";
+      if (!titulo || !id || byTitle.has(titulo)) continue;
+      byTitle.set(titulo, {
+        id,
+        valor: toNumberOrNull(row.valor),
+        prod_comprimento_cm: toNumberOrNull(row.prod_comprimento_cm),
+        prod_largura_cm: toNumberOrNull(row.prod_largura_cm),
+        prod_altura_cm: toNumberOrNull(row.prod_altura_cm),
+        prod_peso_kg: toNumberOrNull(row.prod_peso_kg),
+        hasCategoria: false,
+      });
     }
     if (rows.length < PAGE) break;
     from += PAGE;
   }
-  return { titles, error: null };
+
+  from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from("produto_categorias")
+      .select("produto_id")
+      .range(from, from + PAGE - 1);
+    if (error) return { ok: false, message: error.message };
+    const rows = data ?? [];
+    const withCategoria = new Set(
+      rows.map((row) => (typeof row.produto_id === "string" ? row.produto_id : "")).filter(Boolean),
+    );
+    for (const product of byTitle.values()) {
+      if (withCategoria.has(product.id)) product.hasCategoria = true;
+    }
+    if (rows.length < PAGE) break;
+    from += PAGE;
+  }
+
+  return { ok: true, byTitle };
+}
+
+async function fetchCategoriaByNome(supabase: SupabaseClient): Promise<
+  | { ok: true; byNome: Map<string, string> }
+  | { ok: false; message: string }
+> {
+  const byNome = new Map<string, string>();
+  let from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from("categorias")
+      .select("id, nome")
+      .range(from, from + PAGE - 1);
+    if (error) return { ok: false, message: error.message };
+    const rows = data ?? [];
+    for (const row of rows) {
+      const nome = typeof row.nome === "string" ? row.nome : "";
+      const id = typeof row.id === "string" ? row.id : "";
+      const key = normalizeWegaText(nome);
+      if (!key || !id || byNome.has(key)) continue;
+      byNome.set(key, id);
+    }
+    if (rows.length < PAGE) break;
+    from += PAGE;
+  }
+  return { ok: true, byNome };
 }
 
 async function fetchMarcasModelos(supabase: SupabaseClient): Promise<
@@ -111,37 +195,96 @@ type PlannedProduct = {
   row: WegaKitRow;
   modeloIds: string[];
   unmatchedReason: string | null;
+  categoriaId: string | null;
 };
+
+type PlannedUpdate = {
+  row: WegaKitRow;
+  productId: string;
+  patch: ProductBlankPatch;
+  categoriaId: string | null;
+};
+
+function blankFillPatch(existing: ExistingProduct, row: WegaKitRow): ProductBlankPatch {
+  const patch: ProductBlankPatch = {};
+  if (existing.valor == null && row.valor != null) patch.valor = row.valor;
+  if (existing.prod_comprimento_cm == null && row.prodComprimentoCm != null) {
+    patch.prod_comprimento_cm = row.prodComprimentoCm;
+  }
+  if (existing.prod_largura_cm == null && row.prodLarguraCm != null) {
+    patch.prod_largura_cm = row.prodLarguraCm;
+  }
+  if (existing.prod_altura_cm == null && row.prodAlturaCm != null) {
+    patch.prod_altura_cm = row.prodAlturaCm;
+  }
+  if (existing.prod_peso_kg == null && row.prodPesoKg != null) {
+    patch.prod_peso_kg = row.prodPesoKg;
+  }
+  return patch;
+}
+
+function resolveCategoriaId(
+  nome: string,
+  byNome: Map<string, string>,
+  missing: Set<string>,
+): string | null {
+  const trimmed = nome.trim();
+  if (!trimmed) return null;
+  const id = byNome.get(normalizeWegaText(trimmed));
+  if (!id) missing.add(trimmed);
+  return id ?? null;
+}
 
 function planRows(
   rows: WegaKitRow[],
-  existingTitles: Set<string>,
+  existingByTitle: Map<string, ExistingProduct>,
   marcas: WegaMarcaCandidate[],
   modelosByMarca: Map<string, WegaModeloCandidate[]>,
+  categoriaByNome: Map<string, string>,
 ): {
   toCreate: PlannedProduct[];
+  toUpdate: PlannedUpdate[];
   skipped: number;
   unmatchedCompat: WegaImportUnmatched[];
   sampleTitles: string[];
+  categoryWarnings: string[];
 } {
   const toCreate: PlannedProduct[] = [];
+  const toUpdate: PlannedUpdate[] = [];
   const unmatchedCompat: WegaImportUnmatched[] = [];
   let skipped = 0;
   const seenInBatch = new Set<string>();
+  const missingCategorias = new Set<string>();
 
   for (const row of rows) {
-    if (existingTitles.has(row.titulo) || seenInBatch.has(row.titulo)) {
+    if (seenInBatch.has(row.titulo)) {
       skipped += 1;
       continue;
     }
     seenInBatch.add(row.titulo);
 
+    const existing = existingByTitle.get(row.titulo);
+    if (existing) {
+      const patch = blankFillPatch(existing, row);
+      const categoriaId = existing.hasCategoria
+        ? null
+        : resolveCategoriaId(row.categoriaNome, categoriaByNome, missingCategorias);
+      if (Object.keys(patch).length === 0 && !categoriaId) {
+        skipped += 1;
+        continue;
+      }
+      toUpdate.push({ row, productId: existing.id, patch, categoriaId });
+      continue;
+    }
+
+    const categoriaId = resolveCategoriaId(row.categoriaNome, categoriaByNome, missingCategorias);
     const marcaId = findMarcaId(row.montadora, marcas);
     if (!marcaId) {
       toCreate.push({
         row,
         modeloIds: [],
         unmatchedReason: `Marca não encontrada: ${row.montadora}`,
+        categoriaId,
       });
       unmatchedCompat.push({
         sheetRow: row.sheetRow,
@@ -164,6 +307,7 @@ function planRows(
         row,
         modeloIds: [],
         unmatchedReason: `Nenhum modelo parecido para: ${row.carroModelo}`,
+        categoriaId,
       });
       unmatchedCompat.push({
         sheetRow: row.sheetRow,
@@ -179,14 +323,17 @@ function planRows(
       row,
       modeloIds: matched.map((m) => m.id),
       unmatchedReason: null,
+      categoriaId,
     });
   }
 
   return {
     toCreate,
+    toUpdate,
     skipped,
     unmatchedCompat,
-    sampleTitles: toCreate.slice(0, 20).map((p) => p.row.titulo),
+    sampleTitles: [...toCreate, ...toUpdate].slice(0, 20).map((p) => p.row.titulo),
+    categoryWarnings: [...missingCategorias].map((nome) => `Categoria não encontrada: ${nome}`),
   };
 }
 
@@ -201,17 +348,21 @@ export async function importWegaKitsProducts(
   const parsed = parseWegaKitsWorkbook(buffer);
   if (!parsed.ok) return parsed;
 
-  const titlesRes = await fetchAllTitulosDraftish(supabase);
-  if (titlesRes.error) return { ok: false, message: titlesRes.error };
-
-  const catalog = await fetchMarcasModelos(supabase);
+  const [existingRes, catalog, categoriasRes] = await Promise.all([
+    fetchExistingByTitle(supabase),
+    fetchMarcasModelos(supabase),
+    fetchCategoriaByNome(supabase),
+  ]);
+  if (!existingRes.ok) return existingRes;
   if (!catalog.ok) return catalog;
+  if (!categoriasRes.ok) return categoriasRes;
 
   const planned = planRows(
     parsed.rows,
-    titlesRes.titles,
+    existingRes.byTitle,
     catalog.marcas,
     catalog.modelosByMarca,
+    categoriasRes.byNome,
   );
 
   const marcaIdByMontadora = new Map<string, string | null>();
@@ -230,7 +381,9 @@ export async function importWegaKitsProducts(
   );
 
   const errors: string[] = [];
+  const warnings = [...parsed.warnings, ...planned.categoryWarnings];
   let created = 0;
+  let updated = 0;
   let compatLinks = 0;
 
   if (options.dryRun) {
@@ -243,11 +396,12 @@ export async function importWegaKitsProducts(
       dryRun: true,
       totalRows: parsed.rows.length,
       created,
+      updated: planned.toUpdate.length,
       skipped: planned.skipped,
       compatLinks,
       unmatchedCompat: planned.unmatchedCompat,
       suggestedModelos,
-      warnings: parsed.warnings,
+      warnings,
       errors,
       sampleTitles: planned.sampleTitles,
     };
@@ -261,7 +415,11 @@ export async function importWegaKitsProducts(
       titulo: item.row.titulo,
       descricao: item.row.descricao,
       cod_produto: null,
-      valor: null,
+      valor: item.row.valor,
+      prod_comprimento_cm: item.row.prodComprimentoCm,
+      prod_largura_cm: item.row.prodLarguraCm,
+      prod_altura_cm: item.row.prodAlturaCm,
+      prod_peso_kg: item.row.prodPesoKg,
       quantidade_estoque: 0,
       status: PRODUCT_STATUS_DRAFT,
       compat_todos_modelos: false,
@@ -290,6 +448,7 @@ export async function importWegaKitsProducts(
       ano_inicio: number;
       ano_fim: number;
     }> = [];
+    const categoriaRows: Array<{ produto_id: string; categoria_id: string }> = [];
 
     for (const item of chunk) {
       const produtoId = byTitle.get(item.row.titulo);
@@ -302,6 +461,9 @@ export async function importWegaKitsProducts(
           ano_fim: item.row.anoFim,
         });
       }
+      if (item.categoriaId) {
+        categoriaRows.push({ produto_id: produtoId, categoria_id: item.categoriaId });
+      }
     }
 
     if (compatRows.length > 0) {
@@ -312,6 +474,42 @@ export async function importWegaKitsProducts(
         compatLinks += compatRows.length;
       }
     }
+
+    if (categoriaRows.length > 0) {
+      const { error: catErr } = await supabase.from("produto_categorias").insert(categoriaRows);
+      if (catErr) errors.push(`Categorias: ${catErr.message}`);
+    }
+  }
+
+  for (let i = 0; i < planned.toUpdate.length; i += CHUNK) {
+    const chunk = planned.toUpdate.slice(i, i + CHUNK);
+    const results = await Promise.all(
+      chunk.map(async (item) => {
+        if (Object.keys(item.patch).length > 0) {
+          const { error } = await supabase.from("produtos").update(item.patch).eq("id", item.productId);
+          if (error) return error.message;
+        }
+        if (item.categoriaId) {
+          const { error } = await supabase.from("produto_categorias").insert({
+            produto_id: item.productId,
+            categoria_id: item.categoriaId,
+          });
+          if (error) return `Categorias: ${error.message}`;
+        }
+        return null;
+      }),
+    );
+    for (const message of results) {
+      if (message) errors.push(message);
+      else updated += 1;
+    }
+  }
+
+  if (created > 0 || updated > 0) {
+    revalidatePath("/admin/produtos");
+    revalidatePath("/produtos");
+    revalidatePath("/");
+    revalidateStoreCatalogCache();
   }
 
   return {
@@ -319,11 +517,12 @@ export async function importWegaKitsProducts(
     dryRun: false,
     totalRows: parsed.rows.length,
     created,
+    updated,
     skipped: planned.skipped,
     compatLinks,
     unmatchedCompat: planned.unmatchedCompat,
     suggestedModelos,
-    warnings: parsed.warnings,
+    warnings,
     errors,
     sampleTitles: planned.sampleTitles,
   };

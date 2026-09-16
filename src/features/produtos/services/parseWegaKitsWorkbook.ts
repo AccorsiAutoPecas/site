@@ -25,6 +25,13 @@ export type WegaKitRow = {
   descricao: string;
   anoInicio: number;
   anoFim: number;
+  /** Null when the cell is empty or the number could not be parsed. */
+  valor: number | null;
+  prodAlturaCm: number | null;
+  prodComprimentoCm: number | null;
+  prodLarguraCm: number | null;
+  prodPesoKg: number | null;
+  categoriaNome: string;
 };
 
 export type ParseWegaKitsResult =
@@ -60,7 +67,48 @@ type ColumnMap = {
   filtroOleo: number;
   filtroCombustivel: number;
   filtroCabine: number;
+  altura: number;
+  comprimento: number;
+  largura: number;
+  peso: number;
+  preco: number;
+  categoria: number;
 };
+
+function findCol(headers: string[], label: string, mode: "exact" | "includes"): number {
+  if (mode === "exact") return headers.findIndex((h) => h === label);
+  return headers.findIndex((h) => h === label || h.includes(label));
+}
+
+/** First match across the header row and the optional sub-header row. */
+function findAcross(headerRows: string[][], label: string, mode: "exact" | "includes"): number {
+  for (const headers of headerRows) {
+    const index = findCol(headers, label, mode);
+    if (index >= 0) return index;
+  }
+  return -1;
+}
+
+/**
+ * Brazilian spreadsheet numbers: `189`, `189,00`, `1.189,50`, `R$ 189,00`, `0,400kg`.
+ * Empty → null. Invalid → "invalid" (caller warns and keeps the row).
+ */
+function parseOptionalMeasure(raw: string): number | null | "invalid" {
+  const stripped = raw
+    .trim()
+    .replace(/r\$/gi, "")
+    .replace(/kg/gi, "")
+    .replace(/cm/gi, "")
+    .replace(/\s+/g, "");
+  if (!stripped) return null;
+
+  const normalized = stripped.includes(",")
+    ? stripped.replace(/\./g, "").replace(",", ".")
+    : stripped;
+  const value = Number(normalized);
+  if (!Number.isFinite(value) || value < 0) return "invalid";
+  return value;
+}
 
 function findHeaderRow(matrix: unknown[][]): { headerRowIndex: number; map: ColumnMap } | null {
   const maxScan = Math.min(matrix.length, 12);
@@ -81,7 +129,7 @@ function findHeaderRow(matrix: unknown[][]): { headerRowIndex: number; map: Colu
           ? findIncludes("carro")
           : findIncludes("modelo");
 
-    if (codigo < 0 || montadora < 0 || carroModelo < 0) continue;
+    if (montadora < 0 || carroModelo < 0) continue;
 
     const combustivelIndexes = headers
       .map((h, i) => (h === "combustivel" || h.includes("combustivel") ? i : -1))
@@ -127,6 +175,10 @@ function findHeaderRow(matrix: unknown[][]): { headerRowIndex: number; map: Colu
 
     if (cambio < 0 || motor < 0 || ano < 0) continue;
 
+    const next = matrix[r + 1] ?? [];
+    const nextHeaders = next.map((cell) => normalizeHeader(cellText(cell)));
+    const headerRows = [headers, nextHeaders];
+
     return {
       headerRowIndex: r,
       map: {
@@ -141,6 +193,12 @@ function findHeaderRow(matrix: unknown[][]): { headerRowIndex: number; map: Colu
         filtroOleo: oleo,
         filtroCombustivel: filtroComb,
         filtroCabine: cabine,
+        altura: findAcross(headerRows, "altura", "includes"),
+        comprimento: findAcross(headerRows, "comprimento", "includes"),
+        largura: findAcross(headerRows, "largura", "includes"),
+        peso: findAcross(headerRows, "peso", "includes"),
+        preco: findAcross(headerRows, "preco", "includes"),
+        categoria: findAcross(headerRows, "categoria", "includes"),
       },
     };
   }
@@ -150,6 +208,24 @@ function findHeaderRow(matrix: unknown[][]): { headerRowIndex: number; map: Colu
 function col(row: unknown[], index: number): string {
   if (index < 0) return "";
   return cellText(row[index]);
+}
+
+function readMeasure(
+  row: unknown[],
+  index: number,
+  sheetRow: number,
+  label: string,
+  warnings: string[],
+): number | null {
+  if (index < 0) return null;
+  const raw = col(row, index);
+  if (!raw) return null;
+  const parsed = parseOptionalMeasure(raw);
+  if (parsed === "invalid") {
+    warnings.push(`Linha ${sheetRow}: ${label} inválido "${raw}" — campo ignorado.`);
+    return null;
+  }
+  return parsed;
 }
 
 /**
@@ -185,7 +261,7 @@ export function parseWegaKitsWorkbook(buffer: ArrayBuffer | Uint8Array): ParseWe
     return {
       ok: false,
       message:
-        "Não foi possível identificar o cabeçalho. Esperado: CÓDIGO, MONTADORA, CARRO / MODELO, ANO, etc.",
+        "Não foi possível identificar o cabeçalho. Esperado: MONTADORA, CARRO / MODELO, ANO, etc.",
     };
   }
 
@@ -266,6 +342,12 @@ export function parseWegaKitsWorkbook(buffer: ArrayBuffer | Uint8Array): ParseWe
       }),
       anoInicio: anos.anoInicio,
       anoFim: anos.anoFim,
+      valor: readMeasure(row, map.preco, sheetRow, "Preço", warnings),
+      prodAlturaCm: readMeasure(row, map.altura, sheetRow, "Altura", warnings),
+      prodComprimentoCm: readMeasure(row, map.comprimento, sheetRow, "Comprimento", warnings),
+      prodLarguraCm: readMeasure(row, map.largura, sheetRow, "Largura", warnings),
+      prodPesoKg: readMeasure(row, map.peso, sheetRow, "Peso", warnings),
+      categoriaNome: col(row, map.categoria),
     });
   }
 
