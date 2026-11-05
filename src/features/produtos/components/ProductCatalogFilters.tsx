@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
@@ -16,6 +17,8 @@ import type { CategoryListItem } from "@/types/category";
 
 type ProductCatalogFiltersProps = {
   categorias: CategoryListItem[];
+  /** Categorias com kits publicados: atalhos "Kits de Suspensão" etc. */
+  kitCategorias?: Array<{ id: string; nome: string; slug: string }>;
   marcas: StoreMarcaOption[];
   sliderMax: number;
   modelosVeiculo: VehicleFilterModelo[];
@@ -45,6 +48,7 @@ function IconChevronDown({ className }: { className?: string }) {
 
 export function ProductCatalogFilters({
   categorias,
+  kitCategorias = [],
   marcas,
   sliderMax,
   modelosVeiculo,
@@ -288,6 +292,20 @@ export function ProductCatalogFilters({
           </legend>
           {categoriaOpen ? (
             <div id={categoriasPanelId}>
+              {kitCategorias.length > 0 ? (
+                <ul className="mb-2 space-y-0.5 border-b border-store-line/60 pb-2">
+                  {kitCategorias.map((k) => (
+                    <li key={`kit-${k.id}`}>
+                      <Link
+                        href={`/kits?categoria=${k.slug}`}
+                        className="block rounded-md px-1 py-1.5 text-sm font-bold text-store-navy transition hover:bg-store-subtle/60 hover:text-store-accent"
+                      >
+                        Kits de {k.nome}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               {categorias.length === 0 ? (
                 <p className="text-sm text-store-navy-muted">Nenhuma categoria cadastrada.</p>
               ) : (

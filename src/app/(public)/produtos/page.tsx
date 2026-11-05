@@ -12,7 +12,7 @@ import {
   getCatalogProducts,
   getCatalogSliderMax,
 } from "@/features/produtos/services/getCatalogProducts";
-import { searchPublishedKits } from "@/features/kits/services/getHomeKits";
+import { getKitCategorias, searchPublishedKits } from "@/features/kits/services/getHomeKits";
 import { KitsSection } from "@/features/kits/components/KitsSection";
 import { getVehicleFilterCatalogData } from "@/features/compatibilidade/services/getVehicleFilterCatalogData";
 import {
@@ -33,10 +33,11 @@ export default async function ProdutosPage({
   const sp = await searchParams;
   const requestedPage = parseCatalogPage(sp);
 
-  const [sliderMax, categorias, marcas] = await Promise.all([
+  const [sliderMax, categorias, marcas, kitCategorias] = await Promise.all([
     getCatalogSliderMax(),
     getHomeCategories(),
     getStoreMarcas(),
+    getKitCategorias(),
   ]);
 
   const filters = normalizeCatalogFilters(parseCatalogSearchParams(sp), sliderMax);
@@ -91,6 +92,7 @@ export default async function ProdutosPage({
               >
                 <ProductCatalogFilters
                   categorias={categorias}
+                  kitCategorias={kitCategorias}
                   marcas={marcas}
                   sliderMax={sliderMax}
                   modelosVeiculo={vehicleFilterData.modelos}
