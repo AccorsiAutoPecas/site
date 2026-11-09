@@ -29,6 +29,7 @@ type PedidoCheckoutRow = {
   total: string | number;
   desconto_cupom: string | number | null;
   desconto_kit?: string | number | null;
+  desconto_cashback?: string | number | null;
 };
 
 function resolveAppBaseUrl(): string {
@@ -281,6 +282,19 @@ export async function criarPedidoECheckout(
     return { ok: false, message: "Resposta inesperada ao criar o pedido. Tente novamente." };
   }
 
+  if (payload.usar_cashback === true) {
+    const { error: cashbackError } = await supabase.rpc("aplicar_cashback_pedido", {
+      p_pedido_id: pedidoId,
+      p_valor: 999999,
+    });
+    if (cashbackError) {
+      return {
+        ok: false,
+        message: `Pedido criado, mas não foi possível aplicar o cashback: ${cashbackError.message}`,
+      };
+    }
+  }
+
   const { data: itensRows, error: itensError } = await supabase
     .from("pedido_itens")
     .select("titulo_snapshot, cod_produto_snapshot, quantidade, preco_unitario")
@@ -297,7 +311,7 @@ export async function criarPedidoECheckout(
 
   const { data: pedidoRow, error: pedidoError } = await supabase
     .from("pedidos")
-    .select("frete, subtotal, total, desconto_cupom, desconto_kit")
+    .select("frete, subtotal, total, desconto_cupom, desconto_kit, desconto_cashback")
     .eq("id", pedidoId)
     .single();
 
@@ -312,6 +326,7 @@ export async function criarPedidoECheckout(
   const freteValor = normalizeMoney(pedidoVals.frete);
   const descontoCupomVal = normalizeMoney(pedidoVals.desconto_cupom ?? 0);
   const descontoKitVal = normalizeMoney(pedidoVals.desconto_kit ?? 0);
+  const descontoCashbackVal = normalizeMoney(pedidoVals.desconto_cashback ?? 0);
 
   const preferenceItems = buildMercadoPagoPreferenceItems(
     itens,
@@ -319,7 +334,7 @@ export async function criarPedidoECheckout(
     normalizeMoney(pedidoVals.subtotal),
     normalizeMoney(pedidoVals.frete),
     normalizeMoney(pedidoVals.total),
-    descontoCupomVal + descontoKitVal,
+    descontoCupomVal + descontoKitVal + descontoCashbackVal,
   );
 
   const preferenceBody: Record<string, unknown> = {

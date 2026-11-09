@@ -31,6 +31,8 @@ type CheckoutPageProps = {
   initialEndereco?: ProfileEndereco;
   /** Quando configurado no ambiente, exibe opção de retirada na loja (sem frete). */
   lojaRetirada?: StorePickupAddress | null;
+  /** Saldo de cashback disponível do cliente (reais). */
+  saldoCashback?: number;
 };
 
 type ModoEntrega = "envio" | "retirada";
@@ -39,6 +41,7 @@ export function CheckoutPage({
   defaultDestinatarioNome = "",
   initialEndereco = emptyProfileEndereco(),
   lojaRetirada = null,
+  saldoCashback = 0,
 }: CheckoutPageProps) {
   const baseId = useId();
   const { lines, itemCount, isReady, kitClaims } = useCart();
@@ -106,7 +109,13 @@ export function CheckoutPage({
   const [cupomDesconto, setCupomDesconto] = useState<number | null>(null);
   const [cupomMensagem, setCupomMensagem] = useState<string | null>(null);
   const [cupomBusy, setCupomBusy] = useState(false);
-  const total = Math.max(0, baseAposKit + shipping - (cupomDesconto ?? 0));
+  const [usarCashback, setUsarCashback] = useState(false);
+  const totalAntesCashback = Math.max(0, baseAposKit + shipping - (cupomDesconto ?? 0));
+  /** Mesma regra da RPC: mantém ao menos R$ 1,00 a pagar. */
+  const cashbackAplicado = usarCashback
+    ? Math.round(Math.max(0, Math.min(saldoCashback, totalAntesCashback - 1)) * 100) / 100
+    : 0;
+  const total = Math.max(0, totalAntesCashback - cashbackAplicado);
 
   useEffect(() => {
     setCupomDesconto(null);
@@ -215,6 +224,7 @@ export function CheckoutPage({
     const payload: CheckoutPayload = {
       ...payloadBase,
       ...(codigoCupom ? { cupom_codigo: codigoCupom } : {}),
+      ...(cashbackAplicado > 0 ? { usar_cashback: true } : {}),
       ...(kitClaims.length > 0
         ? { kits: kitClaims.map((c) => ({
               ...(c.produtoId ? { produto_id: c.produtoId } : { kit_id: c.kitId }),
@@ -623,6 +633,28 @@ export function CheckoutPage({
                 ) : null}
               </section>
 
+              {saldoCashback > 0 ? (
+                <section
+                  className="rounded-sm border border-store-line/80 bg-white p-5 shadow-sm sm:p-6"
+                  aria-labelledby={`${baseId}-cashback`}
+                >
+                  <h2 id={`${baseId}-cashback`} className="text-lg font-bold text-black">
+                    Cashback
+                  </h2>
+                  <label className="mt-3 flex cursor-pointer items-start gap-3 text-sm text-store-navy">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 accent-store-accent"
+                      checked={usarCashback}
+                      onChange={(e) => setUsarCashback(e.target.checked)}
+                    />
+                    <span>
+                      Usar meu saldo de <strong>{money.format(saldoCashback)}</strong> nesta compra.
+                    </span>
+                  </label>
+                </section>
+              ) : null}
+
               <section
                 className="rounded-sm border border-store-line/80 bg-white p-5 shadow-sm sm:p-6"
                 aria-labelledby={`${baseId}-itens`}
@@ -740,6 +772,14 @@ export function CheckoutPage({
                     </dd>
                   </div>
                 ) : null}
+                {cashbackAplicado > 0 ? (
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-store-navy">Cashback</dt>
+                    <dd className="font-semibold tabular-nums text-emerald-800">
+                      − {money.format(cashbackAplicado)}
+                    </dd>
+                  </div>
+                ) : null}
               </dl>
               <div className="my-5 h-px bg-store-accent" aria-hidden />
               <div className="flex items-end justify-between gap-4">
@@ -762,6 +802,11 @@ export function CheckoutPage({
               <p className="mt-3 text-center text-xs text-store-navy-muted">
                 Você será encaminhado ao Mercado Pago para concluir o pagamento com segurança.
               </p>
+              {total > 0 ? (
+                <p className="mt-2 text-center text-xs font-medium text-emerald-800">
+                  Você ganha {money.format(Math.round(total * 2.5) / 100)} de cashback (2,5%) após o pagamento.
+                </p>
+              ) : null}
             </aside>
           </form>
         )}
