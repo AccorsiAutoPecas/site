@@ -91,7 +91,8 @@ function validatePayload(payload: CheckoutPayload): string | null {
       return "Informe um telefone para contato.";
     }
   } else {
-    if (!Number.isFinite(frete) || frete <= 0) {
+    // Frete 0 = frete grátis; o mínimo do pedido é validado em criar_pedido_checkout.
+    if (!Number.isFinite(frete) || frete < 0) {
       return "Selecione uma opção de frete válida antes de finalizar.";
     }
     const required = [

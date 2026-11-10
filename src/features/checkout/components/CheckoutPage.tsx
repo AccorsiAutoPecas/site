@@ -8,6 +8,8 @@ import type { StorePickupAddress } from "@/config/storePickupAddress";
 import { formatStorePickupAddress } from "@/config/storePickupAddress";
 import { kitClaimDesconto, useCart } from "@/features/carrinho/CartContext";
 import { lookupCep } from "@/features/endereco/services/lookupCep";
+import { FreteGratisBarra } from "@/features/frete/components/FreteGratisBarra";
+import { atingeFreteGratis, opcaoFreteGratisId } from "@/features/frete/freteGratis";
 import { useFreteQuote } from "@/features/frete/hooks/useFreteQuote";
 import type { CheckoutPayload } from "@/features/checkout/types";
 import { criarPedidoECheckout } from "@/features/checkout/services/criarPedidoECheckout";
@@ -103,10 +105,18 @@ export function CheckoutPage({
     cep,
     modoEntrega === "envio" && hasItems && !exigeRetiradaLoja,
   );
-  const shipping =
-    !hasItems ? 0 : modoEntrega === "retirada" ? 0 : frete.freteValue;
   const [cupomInput, setCupomInput] = useState("");
   const [cupomDesconto, setCupomDesconto] = useState<number | null>(null);
+  const freteGratisId = opcaoFreteGratisId(frete.opcoes);
+  const valorProdutosFreteGratis = Math.max(0, baseAposKit - (cupomDesconto ?? 0));
+  const atingiuFreteGratis = atingeFreteGratis(valorProdutosFreteGratis);
+  const freteGratisAplicado =
+    modoEntrega === "envio" &&
+    atingiuFreteGratis &&
+    freteGratisId !== null &&
+    frete.selectedId === freteGratisId;
+  const shipping =
+    !hasItems ? 0 : modoEntrega === "retirada" || freteGratisAplicado ? 0 : frete.freteValue;
   const [cupomMensagem, setCupomMensagem] = useState<string | null>(null);
   const [cupomBusy, setCupomBusy] = useState(false);
   const [usarCashback, setUsarCashback] = useState(false);
@@ -120,7 +130,7 @@ export function CheckoutPage({
   useEffect(() => {
     setCupomDesconto(null);
     setCupomMensagem(null);
-  }, [subtotal, kitDesconto, shipping, itemCount, modoEntrega, frete.selectedId]);
+  }, [subtotal, kitDesconto, frete.freteValue, itemCount, modoEntrega, frete.selectedId]);
 
   useEffect(() => {
     const cepDigits = cep.replace(/\D/g, "").slice(0, 8);
@@ -269,7 +279,10 @@ export function CheckoutPage({
     }
     setCupomBusy(true);
     try {
-      const r = await previewCupomDesconto(c, baseAposKit, shipping);
+      let r = await previewCupomDesconto(c, baseAposKit, shipping);
+      if (r.ok && shipping === 0 && freteGratisAplicado && !atingeFreteGratis(baseAposKit - r.desconto)) {
+        r = await previewCupomDesconto(c, baseAposKit, frete.freteValue);
+      }
       if (r.ok) {
         setCupomDesconto(r.desconto);
         setCupomMensagem(`Desconto de ${money.format(r.desconto)} incorporado ao total.`);
@@ -723,9 +736,18 @@ export function CheckoutPage({
                                 : ""}
                             </span>
                           </span>
-                          <strong className="text-sm text-black">
-                            {money.format(opcao.precoCentavos / 100)}
-                          </strong>
+                          {atingiuFreteGratis && opcao.id === freteGratisId ? (
+                            <span className="text-right leading-tight">
+                              <span className="block text-[11px] text-store-navy-muted line-through">
+                                {money.format(opcao.precoCentavos / 100)}
+                              </span>
+                              <strong className="text-sm text-emerald-700">Grátis</strong>
+                            </span>
+                          ) : (
+                            <strong className="text-sm text-black">
+                              {money.format(opcao.precoCentavos / 100)}
+                            </strong>
+                          )}
                         </label>
                       ))}
                     </fieldset>
@@ -761,7 +783,13 @@ export function CheckoutPage({
                 <div className="flex justify-between gap-4">
                   <dt className="text-store-navy">Frete</dt>
                   <dd className="font-semibold tabular-nums text-black">
-                    {modoEntrega === "retirada" ? "Retirada na loja" : money.format(shipping)}
+                    {modoEntrega === "retirada" ? (
+                      "Retirada na loja"
+                    ) : freteGratisAplicado ? (
+                      <span className="text-emerald-700">Grátis</span>
+                    ) : (
+                      money.format(shipping)
+                    )}
                   </dd>
                 </div>
                 {cupomDesconto != null && cupomDesconto > 0 ? (
@@ -781,6 +809,9 @@ export function CheckoutPage({
                   </div>
                 ) : null}
               </dl>
+              {hasItems && modoEntrega === "envio" && !exigeRetiradaLoja ? (
+                <FreteGratisBarra valorProdutos={valorProdutosFreteGratis} className="mt-4" />
+              ) : null}
               <div className="my-5 h-px bg-store-accent" aria-hidden />
               <div className="flex items-end justify-between gap-4">
                 <span className="text-base font-bold text-black">Total</span>
