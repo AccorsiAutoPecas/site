@@ -1,5 +1,6 @@
 "use server";
 
+import { maxParcelasCheckout } from "@/features/produtos/utils/parcelamento";
 import { redirect } from "next/navigation";
 
 import type { CheckoutPayload } from "@/features/checkout/types";
@@ -342,7 +343,7 @@ export async function criarPedidoECheckout(
     external_reference: pedidoId,
     metadata: { pedido_id: pedidoId },
     /** Limite de parcelas no checkout (alinha com texto na página do produto). */
-    payment_methods: { installments: 3 },
+    payment_methods: { installments: maxParcelasCheckout(normalizeMoney(pedidoVals.total)) },
     back_urls: {
       success: `${baseUrl}/checkout/retorno?status=success`,
       failure: `${baseUrl}/checkout/retorno?status=failure`,
