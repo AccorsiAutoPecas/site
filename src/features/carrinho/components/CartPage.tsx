@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useMemo } from "react";
 
+import { BrindeSelo } from "@/components/store/BrindeSelo";
 import { storeShellContent, storeShellInset } from "@/config/storeShell";
 import { CART_ICON_SRC } from "@/features/carrinho/constants";
 import { useCart } from "@/features/carrinho/CartContext";
@@ -258,6 +259,12 @@ export function CartPage({ initialProfileCep = "" }: CartPageProps) {
                 {money.format(total)}
               </span>
             </div>
+
+            {hasItems ? (
+              <BrindeSelo className="mt-5">
+                Seu pedido também vai com um <span className="font-semibold">presente especial</span> da Accorsi!
+              </BrindeSelo>
+            ) : null}
 
             {canGoCheckout ? (
               <Link
